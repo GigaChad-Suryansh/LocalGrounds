@@ -9,8 +9,8 @@ validated by the server.
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | Geo core: distance, circle checks, safe-zone math, GPS freshness (with tests) | done |
-| 2 | Zone engine: server-time phases, countdowns, red-zone grace and penalties | next |
-| 3 | Capture validation, role-based location visibility, 120 s reveals | |
+| 2 | Zone engine: server-time phases, countdowns, pause/resume, match state machine, red-zone grace and penalties | done |
+| 3 | Capture validation, role-based location visibility, 120 s reveals | next |
 | 4 | Backend: rooms, join/ready, authoritative state, filtered real-time | |
 | 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI | |
 | 6 | Simulated players, safety features (pause/leave/host confirm), real-GPS test | |
@@ -20,6 +20,7 @@ validated by the server.
 ```
 src/shared   shared types
 src/geo      pure geographic maths (no I/O): distance, boundary, zones, freshness
+src/engine   pure game engine driven by an injected server clock: schedule, match state machine, red zone
 tests        vitest suites
 ```
 

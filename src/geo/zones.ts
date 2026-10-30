@@ -36,6 +36,11 @@ export function validatePhases(phases: readonly ZonePhaseConfig[]): string[] {
       errors.push(`Phase ${i + 1}: holdSeconds must be > 0.`);
     if (p.warningSeconds < 0)
       errors.push(`Phase ${i + 1}: warningSeconds must be >= 0.`);
+    const before = phases[i - 1];
+    if (before && p.warningSeconds > before.holdSeconds)
+      errors.push(
+        `Phase ${i + 1}: warning window cannot be longer than the previous phase's hold.`,
+      );
     prev = p.radiusFraction;
   });
   return errors;
