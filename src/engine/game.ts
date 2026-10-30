@@ -7,7 +7,7 @@ import {
   type FreshnessPolicy,
   type SampleIssue,
 } from "../geo/freshness";
-import type { ZonePhaseConfig } from "../geo/zones";
+import { RADIUS_PRESETS_M, type ZonePhaseConfig } from "../geo/zones";
 import {
   evaluateCapture,
   DEFAULT_CAPTURE,
@@ -154,6 +154,60 @@ export function setReady(state: GameState, playerId: string, ready: boolean): Ga
   const p = requirePlayer(state, playerId);
   if (state.match.phase !== "lobby") throw new GameRuleError("Ready can only change in the lobby.");
   return putPlayer(state, { ...p, ready });
+}
+
+export const CAPTURE_RADIUS_RANGE_M = { min: 5, max: 50 } as const;
+
+/**
+ * Host-only lobby settings. Changing the arena size invalidates the host's
+ * safety confirmation: they must re-confirm the (new) area is safe and permitted.
+ */
+export function configureArena(
+  state: GameState,
+  byPlayerId: string,
+  opts: { radiusM?: number; captureRadiusM?: number },
+): GameState {
+  if (byPlayerId !== state.hostId)
+    throw new GameRuleError("Only the host can change the arena settings.");
+  if (state.match.phase !== "lobby")
+    throw new GameRuleError("Arena settings can only change in the lobby.");
+
+  let next = state;
+  if (opts.radiusM !== undefined) {
+    if (!(RADIUS_PRESETS_M as readonly number[]).includes(opts.radiusM))
+      throw new GameRuleError(`Radius must be one of ${RADIUS_PRESETS_M.join(", ")} m.`);
+    if (opts.radiusM !== state.match.outer.radiusM)
+      next = {
+        ...next,
+        match: { ...next.match, outer: { ...next.match.outer, radiusM: opts.radiusM } },
+        safetyConfirmed: false,
+      };
+  }
+  if (opts.captureRadiusM !== undefined) {
+    const { min, max } = CAPTURE_RADIUS_RANGE_M;
+    if (!(opts.captureRadiusM >= min && opts.captureRadiusM <= max))
+      throw new GameRuleError(`Capture radius must be between ${min} and ${max} m.`);
+    next = {
+      ...next,
+      config: {
+        ...next.config,
+        capture: { ...next.config.capture, captureRadiusM: opts.captureRadiusM },
+      },
+    };
+  }
+  return next;
+}
+
+/** Hand the host role to another active player (used when the host leaves). */
+export function transferHost(state: GameState, newHostId: string): GameState {
+  const p = requirePlayer(state, newHostId);
+  if (p.status !== "active") throw new GameRuleError("The new host must be an active player.");
+  return {
+    ...state,
+    hostId: newHostId,
+    // A new host must personally confirm the area before the match can start.
+    safetyConfirmed: state.match.phase === "lobby" ? false : state.safetyConfirmed,
+  };
 }
 
 export function confirmSafety(state: GameState, byPlayerId: string): GameState {

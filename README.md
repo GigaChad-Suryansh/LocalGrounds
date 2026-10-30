@@ -11,8 +11,8 @@ validated by the server.
 | 1 | Geo core: distance, circle checks, safe-zone math, GPS freshness (with tests) | done |
 | 2 | Zone engine: server-time phases, countdowns, pause/resume, match state machine, red-zone grace and penalties | done |
 | 3 | Capture validation, role-based location visibility, 120 s reveals, game reducer + event stream | done |
-| 4 | Backend: rooms, join/ready, authoritative state, filtered real-time | next |
-| 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI, game-style animations | |
+| 4 | Backend: rooms, join/ready, authoritative state, filtered real-time (Node + WebSocket) | done |
+| 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI, game-style animations | next |
 | 6 | Simulated players, safety features (pause/leave/host confirm), real-GPS test | |
 
 ## Layout
@@ -21,8 +21,30 @@ validated by the server.
 src/shared   shared types
 src/geo      pure geographic maths (no I/O): distance, boundary, zones, freshness
 src/engine   pure game engine driven by an injected server clock: schedule, match state machine, red zone
+src/server   protocol (strict parsing), RoomService (transport-agnostic), WebSocket server
 tests        vitest suites
 ```
+
+## Running the server
+
+```
+npm start            # PORT=8080 by default; ws path /ws, health check /healthz
+npm run dev:server   # restart on change
+```
+
+Protocol (JSON over WebSocket): `create`, `join`, `resume`, `location`, `ready`, `configure`,
+`confirm_safety`, `start`, `capture`, `pause`, `resume_match`, `end`, `leave`.
+The server answers with `welcome` (secret token), `snapshot` (the player's own filtered view, pushed every
+tick), `events`, `capture_result`, `location_ack`, `error`.
+
+Server-side rules worth knowing:
+- Players are identified by the connection/token, never by an id in a message (`capture` carries only the survivor id).
+- Location reports have no client timestamp; the server stamps them. Reports are rate limited.
+- Consent is required to create or join. Display names are sanitised (clients must still escape them).
+- The host's GPS fix becomes the arena centre. Resizing the arena withdraws the host's safety confirmation.
+- If the host leaves, the host role passes to another active player (who must re-confirm safety in the lobby).
+- When a match ends, stored locations are wiped, and the room is removed after a short delay.
+- Dropped players can `resume` with their token; idle/abandoned rooms are cleaned up.
 
 ## How the engine is used
 
