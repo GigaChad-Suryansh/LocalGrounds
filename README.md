@@ -10,9 +10,9 @@ validated by the server.
 |---|-------|--------|
 | 1 | Geo core: distance, circle checks, safe-zone math, GPS freshness (with tests) | done |
 | 2 | Zone engine: server-time phases, countdowns, pause/resume, match state machine, red-zone grace and penalties | done |
-| 3 | Capture validation, role-based location visibility, 120 s reveals | next |
-| 4 | Backend: rooms, join/ready, authoritative state, filtered real-time | |
-| 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI | |
+| 3 | Capture validation, role-based location visibility, 120 s reveals, game reducer + event stream | done |
+| 4 | Backend: rooms, join/ready, authoritative state, filtered real-time | next |
+| 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI, game-style animations | |
 | 6 | Simulated players, safety features (pause/leave/host confirm), real-GPS test | |
 
 ## Layout
@@ -23,6 +23,34 @@ src/geo      pure geographic maths (no I/O): distance, boundary, zones, freshnes
 src/engine   pure game engine driven by an injected server clock: schedule, match state machine, red zone
 tests        vitest suites
 ```
+
+## How the engine is used
+
+```
+client --LocationReport--> ingestLocation()  --> GameState (server only)
+client --"tag s1"--------> attemptCapture()  --> server decides from stored samples
+server timer (1 s) ------> tickGame()        --> zone/reveal/timeout events
+GameState ---------------> projectForViewer(state, viewerId)  --> the ONLY payload a client gets
+GameState.events --------> eventsFor(viewerId, events)        --> per-player event feed
+```
+
+Clients never send a timestamp, a distance, or a capture result. `projectForViewer` is the single
+place location data leaves the server, and tests assert that hidden coordinates never appear in the
+serialized payload.
+
+## Game events → UI animations (Phase 5)
+
+The engine emits typed events (no coordinates). The UI maps each one to feedback:
+
+| Event | Planned feedback |
+|-------|------------------|
+| `zone_warning` | pulsing red ring on the next boundary, countdown, warning siren |
+| `zone_shrunk` | boundary contracts with a sweep animation, screen shake |
+| `reveal_started` / `reveal_ended` | radar sweep, player blips pop in, then fade out |
+| `red_zone_entered` / `penalty_started` | red vignette, heartbeat pulse, HP bar drain |
+| `captured` | tag-lock reticle, burst effect, "CAUGHT" banner |
+| `eliminated` | glitch-out of the marker |
+| `match_ended` | victory/defeat splash |
 
 ## Develop
 

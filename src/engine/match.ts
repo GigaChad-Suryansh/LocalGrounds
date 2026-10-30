@@ -3,7 +3,13 @@ import { validatePhases, type ZonePhaseConfig } from "../geo/zones";
 import { computeZoneState, type MatchSchedule, type ZoneState } from "./schedule";
 
 export type MatchPhase = "lobby" | "active" | "paused" | "ended";
-export type MatchEndReason = "timeout" | "host_ended" | "all_captured" | "cancelled";
+export type MatchEndReason =
+  | "timeout"
+  | "host_ended"
+  | "all_captured"
+  | "no_survivors"
+  | "no_killers"
+  | "cancelled";
 
 /**
  * Core match record. The outer boundary is set once and never modified;
