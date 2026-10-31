@@ -12,8 +12,8 @@ validated by the server.
 | 2 | Zone engine: server-time phases, countdowns, pause/resume, match state machine, red-zone grace and penalties | done |
 | 3 | Capture validation, role-based location visibility, 120 s reveals, game reducer + event stream | done |
 | 4 | Backend: rooms, join/ready, authoritative state, filtered real-time (Node + WebSocket) | done |
-| 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI, game-style animations | next |
-| 6 | Simulated players, safety features (pause/leave/host confirm), real-GPS test | |
+| 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI, game-style animations | done |
+| 6 | Simulated players, safety features (pause/leave/host confirm), real-GPS test | next |
 
 ## Layout
 
@@ -64,7 +64,7 @@ serialized payload.
 
 The engine emits typed events (no coordinates). The UI maps each one to feedback:
 
-| Event | Planned feedback |
+| Event | Feedback |
 |-------|------------------|
 | `zone_warning` | pulsing red ring on the next boundary, countdown, warning siren |
 | `zone_shrunk` | boundary contracts with a sweep animation, screen shake |
@@ -73,6 +73,20 @@ The engine emits typed events (no coordinates). The UI maps each one to feedback
 | `captured` | tag-lock reticle, burst effect, "CAUGHT" banner |
 | `eliminated` | glitch-out of the marker |
 | `match_ended` | victory/defeat splash |
+
+## Running the web app
+
+```
+npm run web:build   # builds web/dist
+npm start           # serves the game and the WebSocket on one port (default 8080)
+npm run web:dev     # Vite dev server with /ws proxied to the backend (LG_BACKEND, default localhost:8080)
+npm run ui:smoke    # plays a full match in headless browsers with emulated GPS (needs web:build first)
+```
+
+Browsers only allow geolocation on **HTTPS or localhost**, so to test on phones serve the app over HTTPS
+(a tunnel or a reverse proxy). Map tiles come from OpenStreetMap and fonts from Google Fonts; allow
+those hosts if you restrict the network. Stationary phones often stop emitting GPS updates, so the
+client re-confirms the last fix for up to 45 s before letting the signal show as lost.
 
 ## Develop
 

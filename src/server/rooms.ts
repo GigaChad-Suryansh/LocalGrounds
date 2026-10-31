@@ -362,6 +362,8 @@ export class RoomService {
       maxPlayers: this.opts.maxPlayersPerRoom,
       radiusPresetsM: [...RADIUS_PRESETS_M],
       captureRadiusM: room.game.config.capture.captureRadiusM,
+      revealIntervalMs: room.game.config.reveal.intervalMs,
+      revealDurationMs: room.game.config.reveal.durationMs,
     };
   }
 

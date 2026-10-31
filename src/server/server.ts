@@ -3,10 +3,13 @@ import type { AddressInfo } from "node:net";
 import { WebSocketServer, type WebSocket } from "ws";
 import { parseClientMessage, type ServerMessage } from "./protocol";
 import { RoomService, type Connection, type ServiceOptions } from "./rooms";
+import { createStaticHandler } from "./static";
 
 export interface ServerOptions {
   port: number;
   host?: string;
+  /** Directory of the built web app to serve (omit to run the API only). */
+  staticDir?: string;
   /** Milliseconds between game ticks / snapshot pushes. */
   tickMs?: number;
   service?: RoomService;
@@ -26,12 +29,20 @@ const HEARTBEAT_MS = 15_000;
 export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const service = opts.service ?? new RoomService(opts.serviceOptions);
 
+  const serveStatic = opts.staticDir ? createStaticHandler(opts.staticDir) : null;
+
   const http: Server = createServer((req, res) => {
     if (req.url === "/healthz") {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("ok");
       return;
     }
+    if (req.url?.startsWith("/ws")) {
+      res.writeHead(426, { "content-type": "text/plain" });
+      res.end("WebSocket upgrade required");
+      return;
+    }
+    if (serveStatic?.(req, res)) return;
     res.writeHead(404);
     res.end();
   });

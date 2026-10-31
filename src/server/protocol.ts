@@ -56,6 +56,9 @@ export interface RoomInfo {
   maxPlayers: number;
   radiusPresetsM: number[];
   captureRadiusM: number;
+  /** Reveal cadence, so the UI can draw progress bars. */
+  revealIntervalMs: number;
+  revealDurationMs: number;
 }
 
 export type ServerMessage =
