@@ -58,3 +58,13 @@ turns off shakes, sweeps and tweens; sounds and vibration have their own mute sw
 - Card grid with identical rounded corners: panels are separated by hairline rules and map-key style rows.
 - All-caps tracked eyebrows and mono data labels: not used; labels are sentence case, numerals are
   Barlow Condensed with tabular figures.
+
+
+## Revision 2: dark tactical HUD
+
+The pale "map paper" look read as a web form, not a game, so the whole UI moved to a dark tactical HUD:
+near-black map with a muted dark basemap, a cyan glowing safe zone, white dashed boundary, red hazard
+stripes for the red zone, green circle = survivor, red triangle = killer (shape plus colour, never colour alone).
+Panels are chamfered glass cards; Rajdhani for display type; glow only on things that matter (safe zone, primary
+action, clocks). Banners are compact and sit below the HUD so they never cover the arena; none show on the end screen.
+Always dark, so there is no light theme any more.

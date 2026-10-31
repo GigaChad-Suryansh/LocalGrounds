@@ -29,7 +29,7 @@ function ArenaMark() {
           <circle cx="120" cy="120" r="92" fill="black" />
         </mask>
       </defs>
-      <rect width="240" height="240" fill="url(#olive)" mask="url(#hole)" />
+      <circle cx="120" cy="120" r="116" fill="url(#olive)" mask="url(#hole)" />
       <circle cx="120" cy="120" r="92" className="hazard-ring" />
       <circle cx="120" cy="120" r="54" className="safe-disc" />
       <circle cx="120" cy="120" r="92" className="boundary" pathLength="1" />

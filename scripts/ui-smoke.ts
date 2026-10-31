@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const wait = (p: Player, selector: string, timeout = 40_000) => p.page.waitForSelector(selector, { timeout });
   const banner = (p: Player, text: string, timeout = 40_000) =>
-    p.page.waitForSelector(`.banner:has-text("${text}")`, { timeout });
+    p.page.waitForSelector(`.banner:has-text("${text}")`, { timeout, state: "attached" });
 
   const kai = await newPlayer("Kai", CENTER);
   const sam = await newPlayer("Sam", at(180, 60));
