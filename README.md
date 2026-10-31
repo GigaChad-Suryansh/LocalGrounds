@@ -13,7 +13,7 @@ validated by the server.
 | 3 | Capture validation, role-based location visibility, 120 s reveals, game reducer + event stream | done |
 | 4 | Backend: rooms, join/ready, authoritative state, filtered real-time (Node + WebSocket) | done |
 | 5 | Frontend: Leaflet map, boundary/safe-zone/red-zone, markers, accuracy UI, game-style animations | done |
-| 6 | Simulated players, safety features (pause/leave/host confirm), real-GPS test | next |
+| 6 | Simulated players, safety features (pause/leave/host confirm), real-GPS test | done |
 
 ## Layout
 
@@ -87,6 +87,20 @@ Browsers only allow geolocation on **HTTPS or localhost**, so to test on phones 
 (a tunnel or a reverse proxy). Map tiles come from OpenStreetMap and fonts from Google Fonts; allow
 those hosts if you restrict the network. Stationary phones often stop emitting GPS updates, so the
 client re-confirms the last fix for up to 45 s before letting the signal show as lost.
+
+## Simulation and field testing
+
+```
+npm run sim                    # all scenarios, seeds 1-5
+npm run sim -- gps-chaos 25    # one scenario, 25 seeds
+```
+
+`src/sim` plays whole matches against the real room service on a virtual clock: seeded bots with GPS noise,
+dropouts, stale fixes, urban-canyon bursts and spoofing. A monitor checks every message and true position:
+no hidden coordinates leak, no capture without real proximity, no elimination of a player comfortably inside
+the safe zone, and a paused match stays frozen. Scenarios cover hide-and-seek, bad GPS, spoofing, dropped
+connections, emergency pause (host-only resume) and the host leaving. When you're ready for real phones, follow
+[docs/FIELD-TEST.md](docs/FIELD-TEST.md).
 
 ## Develop
 

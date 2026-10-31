@@ -12,7 +12,8 @@
     "start": "tsx src/server/main.ts",
     "web:dev": "vite --config web/vite.config.ts",
     "web:build": "vite build --config web/vite.config.ts",
-    "ui:smoke": "tsx scripts/ui-smoke.ts"
+    "ui:smoke": "tsx scripts/ui-smoke.ts",
+    "sim": "tsx scripts/simulate.ts"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.22",
