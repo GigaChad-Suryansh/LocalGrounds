@@ -192,21 +192,30 @@ async function main(): Promise<void> {
     check((await kai.page.locator(".lg-pin.is-enemy").count()) === 0, "Survivors are hidden again when the scan ends");
     await shot(kai, "10-after-scan");
 
-    // ------------------------------------------------------------- tag
-    console.log("Tagging");
-    await move(kai, at(180, 25));
+    // ------------------------------------------------------------- radar lock
+    console.log("Radar lock");
+    await move(kai, at(180, 10)); // 50 m from Sam: out of lock range
     await sleep(3500);
-    await move(kai, at(180, 48)); // 12 m from Sam, who stands 60 m out
-    await sleep(3500);
-    await kai.page.locator(".btn.tag").click();
-    await kai.page.getByRole("button", { name: "Sam" }).click();
-    await banner(kai, "Lock-on");
-    check(true, "The first tag attempt locks on");
-    await sleep(2500);
-    await kai.page.locator(".btn.tag").click();
-    await kai.page.getByRole("button", { name: "Sam" }).click();
-    await banner(kai, "Tagged");
-    check(true, "The second tag captures the survivor");
+    await move(kai, at(180, 40)); // 20 m from Sam, who stands 60 m out: inside the 25 m lock range
+    await banner(kai, "Target detected");
+    check((await kai.page.locator(".btn.tag").count()) === 0, "There is no Tag button any more");
+    await kai.page.waitForSelector(".alert.lock.is-killer");
+    check(true, "The killer sees a lock-progress card");
+    await banner(sam, "Radar lock detected");
+    await sam.page.waitForSelector(".alert.lock.is-survivor");
+    check(true, "The survivor gets a RADAR LOCK DETECTED warning and a lock card");
+    check(!(await sam.page.locator(".alert.lock").innerText()).includes("Kai"), "The survivor's lock card does not name the killer");
+    await shot(kai, "11a-lock-killer");
+    await shot(sam, "11b-lock-survivor");
+
+    // The killer steps out of range before the lock completes: lock lost, then back in for the capture.
+    await move(kai, at(180, 5));
+    await banner(kai, "Target lost");
+    check(true, "Leaving range cancels the lock (TARGET LOST)");
+    await shot(kai, "11c-target-lost");
+    await move(kai, at(180, 40));
+    await banner(kai, "Target captured", 60_000);
+    check(true, "Staying in range for the full lock captures the survivor (TARGET CAPTURED)");
     await banner(sam, "Caught");
     await shot(sam, "11-caught");
 

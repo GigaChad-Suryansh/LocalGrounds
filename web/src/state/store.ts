@@ -1,7 +1,7 @@
 import type { ErrorCode, RoomInfo, ServerMessage } from "../../../src/server/protocol";
-import type { KillerFacingOutcome, StartEvaluation, ViewerSnapshot } from "../../../src/engine";
+import type {  StartEvaluation, ViewerSnapshot } from "../../../src/engine";
 import type { GpsStatus } from "../lib/gps";
-import { captureResultFx, fxForEvent, type Fx, type FxContext, type FxDraft } from "../lib/fx";
+import { fxForEvent, type Fx, type FxContext, type FxDraft } from "../lib/fx";
 import type { NetStatus } from "../net/connection";
 
 export interface Session {
@@ -23,7 +23,6 @@ export interface ClientState {
   nextFxId: number;
   lastSeq: number;
   error: { id: number; code: ErrorCode; message: string } | null;
-  captureResult: { id: number; outcome: KillerFacingOutcome } | null;
   locationAck: { accepted: boolean; issues: string[]; rateLimited: boolean } | null;
   /** True after the server dropped our token (so the landing screen can say why). */
   sessionExpired: boolean;
@@ -43,7 +42,6 @@ export const initialState = (): ClientState => ({
   nextFxId: 1,
   lastSeq: 0,
   error: null,
-  captureResult: null,
   locationAck: null,
   sessionExpired: false,
 });
@@ -99,14 +97,6 @@ function reduceServer(s: ClientState, msg: ServerMessage, now: number): ClientSt
         if (draft) next = pushFx(next, draft);
       }
       return next;
-    }
-    case "capture_result": {
-      const next: ClientState = {
-        ...s,
-        captureResult: { id: (s.captureResult?.id ?? 0) + 1, outcome: msg.outcome },
-      };
-      const draft = captureResultFx(msg.outcome);
-      return draft ? pushFx(next, draft) : next;
     }
     case "location_ack":
       return { ...s, locationAck: { accepted: msg.accepted, issues: msg.issues, rateLimited: msg.rateLimited ?? false } };

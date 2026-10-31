@@ -8,13 +8,8 @@ import {
   type SampleIssue,
 } from "../geo/freshness";
 import { RADIUS_PRESETS_M, type ZonePhaseConfig } from "../geo/zones";
-import {
-  evaluateCapture,
-  DEFAULT_CAPTURE,
-  type CaptureConfig,
-  type CaptureOutcome,
-  type CaptureTracker,
-} from "./capture";
+import { DEFAULT_CAPTURE, type CaptureConfig } from "./capture";
+import { stepRadarLocks, type LockTracker } from "./radarLock";
 import type { Audience, GameEvent, GameEventBody } from "./events";
 import {
   createMatch,
@@ -67,7 +62,8 @@ export interface GameState {
   /** Host has confirmed the area is safe and permitted. Required to start. */
   safetyConfirmed: boolean;
   players: Record<string, PlayerState>;
-  captureTracker: CaptureTracker;
+  /** Running Radar Locks, keyed killer>survivor. Server-owned; never sent as-is to clients. */
+  locks: LockTracker;
   /** What the last tick saw, so transitions can be turned into events. */
   observed: {
     phaseIndex: number;
@@ -133,7 +129,7 @@ export function createGame(opts: {
     hostId: opts.hostId,
     safetyConfirmed: false,
     players: { [host.id]: host },
-    captureTracker: {},
+    locks: {},
     observed: { phaseIndex: 0, warningActive: false, revealActive: false, revealIndex: 0 },
     events: [],
     eventSeq: 0,
@@ -307,7 +303,9 @@ export function resumeGame(state: GameState, byPlayerId: string, nowMs: number):
   const players: Record<string, PlayerState> = {};
   for (const [id, p] of Object.entries(state.players))
     players[id] = { ...p, redZone: { ...p.redZone, lastUpdateMs: nowMs } };
-  let next = emit({ ...state, match, players }, nowMs, "all", { type: "match_resumed" });
+  const locks: LockTracker = {};
+  for (const [k, l] of Object.entries(state.locks)) locks[k] = { ...l, lastEvalMs: nowMs };
+  let next = emit({ ...state, match, players, locks }, nowMs, "all", { type: "match_resumed" });
   next = finishIfDone(next, nowMs, "no_survivors");
   return next;
 }
@@ -405,45 +403,54 @@ export function ingestLocation(
       }
     }
   }
+  if (p.status === "active") next = updateLocks(next, nowMs);
   return { state: next, accepted: true, issues: check.issues };
 }
 
-// ---------------------------------------------------------------- capture
+// ---------------------------------------------------------------- radar lock
 
 /**
- * A killer asks to tag a survivor. The request carries ONLY the two ids: the
- * server decides using the samples it already holds. Callers must authenticate
- * that `killerId` is the requesting player.
+ * Advance Radar Locks to `nowMs`: start locks for killers in range, fill running ones by server
+ * time, cancel those that broke, and capture survivors whose lock completed. Called from the tick
+ * and after location updates; no client message can start, advance or complete a lock.
  */
-export function attemptCapture(
-  state: GameState,
-  killerId: string,
-  survivorId: string,
-  nowMs: number,
-): { state: GameState; outcome: CaptureOutcome } {
-  const killer = state.players[killerId];
-  const survivor = state.players[survivorId];
-  if (!killer || !survivor)
-    return { state, outcome: { status: "rejected", reason: "unknown_player" } };
-  if (state.match.phase !== "active")
-    return { state, outcome: { status: "rejected", reason: "match_not_active" } };
+export function updateLocks(state: GameState, nowMs: number): GameState {
+  if (state.match.phase !== "active") return state;
+  const step = stepRadarLocks(state.locks, state.players, nowMs, state.config.capture, state.config.freshness);
+  let next: GameState = { ...state, locks: step.locks };
+  const survivorLocked = (locks: LockTracker, id: string) =>
+    Object.values(locks).some((l) => l.survivorId === id);
 
-  const { tracker, outcome } = evaluateCapture(
-    state.captureTracker,
-    killer,
-    survivor,
-    nowMs,
-    state.config.capture,
-    state.config.freshness,
-  );
-  let next: GameState = { ...state, captureTracker: tracker };
+  for (const l of step.started)
+    next = emit(next, nowMs, [l.killerId], { type: "lock_started", targetId: l.survivorId });
+  for (const { lock, reason } of step.lost)
+    next = emit(next, nowMs, [lock.killerId], { type: "lock_lost", targetId: lock.survivorId, reason });
 
-  if (outcome.status === "captured") {
+  for (const done of step.completed) {
+    const survivor = next.players[done.survivorId];
+    if (!survivor || survivor.status !== "active") continue; // someone else got there first
     next = putPlayer(next, { ...survivor, status: "captured" });
-    next = emit(next, nowMs, "all", { type: "captured", killerId, survivorId });
-    next = finishIfDone(next, nowMs, "all_captured");
+    next = emit(next, nowMs, "all", { type: "captured", killerId: done.killerId, survivorId: done.survivorId });
+    // Every other lock on this survivor ends with them.
+    const rest: LockTracker = {};
+    for (const [k, l] of Object.entries(next.locks)) {
+      if (l.survivorId !== done.survivorId) rest[k] = l;
+      else if (l.killerId !== done.killerId)
+        next = emit(next, nowMs, [l.killerId], { type: "lock_lost", targetId: l.survivorId, reason: "inactive" });
+    }
+    next = { ...next, locks: rest };
   }
-  return { state: next, outcome };
+
+  // Survivors hear about a lock starting/ending once, however many killers are involved.
+  const ids = new Set(Object.values(state.players).filter((p) => p.role === "survivor").map((p) => p.id));
+  for (const id of ids) {
+    const was = survivorLocked(state.locks, id) || step.started.some((l) => l.survivorId === id);
+    const now = survivorLocked(next.locks, id);
+    const alive = next.players[id]?.status === "active";
+    if (!survivorLocked(state.locks, id) && now && alive) next = emit(next, nowMs, [id], { type: "radar_locked_on" });
+    else if (was && !now && alive) next = emit(next, nowMs, [id], { type: "radar_lock_cleared" });
+  }
+  return finishIfDone(next, nowMs, "all_captured");
 }
 
 // ---------------------------------------------------------------- clock
@@ -478,6 +485,7 @@ export function tickGame(state: GameState, nowMs: number): GameState {
   if (!reveal.active && obs.revealActive)
     next = emit(next, nowMs, "all", { type: "reveal_ended", index: obs.revealIndex });
 
+  next = updateLocks(next, nowMs);
   return {
     ...next,
     observed: {

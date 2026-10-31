@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   addPlayer,
-  attemptCapture,
   confirmSafety,
   drainEvents,
   endGame,
@@ -9,17 +8,17 @@ import {
   evaluateStart,
   GameRuleError,
   ingestLocation,
-  killerFacingOutcome,
   leaveGame,
   pauseGame,
   resumeGame,
   setReady,
   startGame,
   tickGame,
+  updateLocks,
   currentZone,
   type GameState,
 } from "../src/engine";
-import { ELIMINATE, NOW, SEC, P, at, buildLobby, activeGame, place, report } from "./helpers";
+import { ELIMINATE, LONG_PHASES, NOW, SEC, P, at, buildLobby, activeGame, place, report, touch } from "./helpers";
 
 // ------------------------------------------------------------ starting a match
 
@@ -135,43 +134,28 @@ describe("location ingestion is server-authoritative", () => {
   });
 });
 
-// ------------------------------------------------------------ capture through the game
+// ------------------------------------------------------------ radar lock through the game
 
-describe("capturing (simulated chase)", () => {
+describe("Radar Lock through the game engine", () => {
   const duel = () =>
     activeGame({
+      phases: LONG_PHASES,
       roster: [
         { id: "k1", role: "killer", pos: [0, 60] },
-        { id: "s1", role: "survivor", pos: [0, 100] },
+        { id: "s1", role: "survivor", pos: [0, 80] }, // 20 m from the killer: in range from the start
       ],
     });
 
-  it("is validated by the server from stored samples and ends the match when the last survivor falls", () => {
+  /** One server second: everybody reports, then the clock ticks. */
+  const second = (g: GameState, t: number) => tickGame(touch(g, t), NOW + t * SEC);
+
+  it("is decided by the server from stored samples and ends the match when the last survivor falls", () => {
     let g = duel();
-
-    // t=1: 40 m apart -> miss (and the killer is told nothing about distance)
-    let r = attemptCapture(g, "k1", "s1", NOW + 1 * SEC);
-    expect(r.outcome).toMatchObject({ status: "rejected", reason: "out_of_range" });
-    expect(killerFacingOutcome(r.outcome)).toEqual({ status: "miss" });
-    g = r.state;
-
-    // t=5: survivor walks 20 m towards the killer
-    g = place(g, "s1", at(0, 80), 5);
-    g = place(g, "k1", at(0, 60), 5);
-    r = attemptCapture(g, "k1", "s1", NOW + 5 * SEC);
-    expect(r.outcome).toEqual({ status: "pending", hits: 1, required: 2 });
-    g = r.state;
-    r = attemptCapture(g, "k1", "s1", NOW + 5 * SEC); // same samples: not counted twice
-    expect(r.outcome).toEqual({ status: "pending", hits: 1, required: 2 });
-    g = r.state;
-
-    // t=7: fresh samples, still in range -> captured
-    g = place(g, "s1", at(0, 80), 7);
-    g = place(g, "k1", at(0, 60), 7);
-    r = attemptCapture(g, "k1", "s1", NOW + 7 * SEC);
-    expect(r.outcome).toEqual({ status: "captured" });
-    g = r.state;
-
+    for (let t = 1; t <= 4; t++) {
+      g = second(g, t);
+      expect(P(g, "s1").status).toBe("active");
+    }
+    g = second(g, 5);
     expect(P(g, "s1").status).toBe("captured");
     expect(g.match.phase).toBe("ended");
     expect(g.match.endReason).toBe("all_captured");
@@ -181,44 +165,19 @@ describe("capturing (simulated chase)", () => {
     expect(JSON.stringify(captured)).not.toMatch(/lat|lng/);
   });
 
-  it("cannot capture without server-side locations, however the request is phrased", () => {
+  it("never captures without server-side locations", () => {
     const base = duel();
-    const g: GameState = {
-      ...base,
-      players: { ...base.players, s1: { ...P(base, "s1"), sample: null } },
-    };
-    const r = attemptCapture(g, "k1", "s1", NOW + SEC);
-    expect(r.outcome).toEqual({ status: "rejected", reason: "no_location", side: "survivor" });
-    expect(killerFacingOutcome(r.outcome)).toEqual({ status: "miss" });
-    expect(P(r.state, "s1").status).toBe("active");
+    const g: GameState = { ...base, players: { ...base.players, s1: { ...P(base, "s1"), sample: null } } };
+    const later = tickGame(g, NOW + 30 * SEC);
+    expect(P(later, "s1").status).toBe("active");
+    expect(Object.keys(later.locks)).toHaveLength(0);
   });
 
-  it("refuses to capture on a stale location even when the players stand together", () => {
-    const g = duel();
-    // both were last reported at t=0; by t=60 those samples are far too old
-    expect(attemptCapture(g, "k1", "s1", NOW + 60 * SEC).outcome).toMatchObject({
-      status: "rejected",
-      reason: "stale_location",
-    });
-  });
-
-  it("refuses captures while the match is not active", () => {
+  it("does not advance a lock while the match is not active", () => {
     const g = pauseGame(duel(), "s1", NOW + 1 * SEC);
-    expect(attemptCapture(g, "k1", "s1", NOW + 2 * SEC).outcome).toEqual({
-      status: "rejected",
-      reason: "match_not_active",
-    });
-    expect(attemptCapture(buildLobby(), "k1", "s1", NOW).outcome).toMatchObject({
-      reason: "match_not_active",
-    });
-  });
-
-  it("rejects survivors trying to capture and unknown players", () => {
-    const g = duel();
-    expect(attemptCapture(g, "s1", "k1", NOW + SEC).outcome).toMatchObject({ reason: "not_a_killer" });
-    expect(attemptCapture(g, "k1", "nobody", NOW + SEC).outcome).toMatchObject({
-      reason: "unknown_player",
-    });
+    const later = updateLocks(g, NOW + 20 * SEC);
+    expect(later.locks).toEqual({});
+    expect(P(later, "s1").status).toBe("active");
   });
 });
 

@@ -19,6 +19,11 @@ export type GameEventBody =
   | { type: "captured"; killerId: string; survivorId: string }
   | { type: "eliminated"; playerId: string; cause: "red_zone" }
   | { type: "player_left"; playerId: string }
+  // private to the killer (target) or to the survivor (never names the killer):
+  | { type: "lock_started"; targetId: string }
+  | { type: "lock_lost"; targetId: string; reason: "out_of_range" | "signal" | "inactive" }
+  | { type: "radar_locked_on" }
+  | { type: "radar_lock_cleared" }
   // private to the affected player:
   | { type: "red_zone_entered"; graceMs: number }
   | { type: "red_zone_cleared" }

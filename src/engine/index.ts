@@ -3,6 +3,7 @@ export * from "./match";
 export * from "./redZone";
 export * from "./players";
 export * from "./capture";
+export * from "./radarLock";
 export * from "./reveal";
 export * from "./events";
 export * from "./game";

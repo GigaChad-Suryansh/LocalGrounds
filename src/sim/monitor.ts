@@ -37,6 +37,7 @@ export class Monitor {
   private readonly seenSeq = new Set<number>();
   private readonly lastInside = new Map<string, number>();
   private readonly byId = new Map<string, SimBot>();
+  private readonly lockStart = new Map<string, number>();
   private pausedFor = 0;
   private pausedRadius: number | null = null;
   private stepGuarded = 0;
@@ -64,7 +65,13 @@ export class Monitor {
     } else if (msg.t === "events") {
       const text = JSON.stringify(msg.events);
       if (/"lat"|"lng"/.test(text)) this.fail("leak", `an events message to ${viewer.spec.name} contains coordinates`);
-      for (const e of msg.events) this.onEvent(e);
+      // The warning a locked survivor gets must not say who or where the killer is.
+      for (const e of msg.events)
+        if (e.type === "radar_locked_on" || e.type === "radar_lock_cleared")
+          for (const k of this.world.bots)
+            if (k.spec.role === "killer" && JSON.stringify(e).includes(k.playerId))
+              this.fail("leak", `a ${e.type} event names killer ${k.spec.name}`);
+      for (const e of msg.events) this.onEvent(e, viewer);
     }
     this.checkRawLeak(viewer, msg);
   }
@@ -99,17 +106,21 @@ export class Monitor {
         }
   }
 
-  private onEvent(e: GameEvent): void {
+  private onEvent(e: GameEvent, viewer: SimBot): void {
     if (e.audience === "all") {
       if (this.seenSeq.has(e.seq)) return;
       this.seenSeq.add(e.seq);
     }
     if (GUARDED.has(e.type)) this.stepGuarded++;
     switch (e.type) {
+      case "lock_started":
+        this.lockStart.set(`${viewer.playerId}>${e.targetId}`, e.atMs);
+        break;
       case "captured":
+        if (this.captured.has(e.survivorId)) this.fail("double_capture", `${e.survivorId} was captured twice`);
         this.stats.captures++;
         this.captured.add(e.survivorId);
-        this.checkCapture(e.killerId, e.survivorId);
+        this.checkCapture(e.killerId, e.survivorId, e.atMs);
         break;
       case "eliminated":
         this.stats.eliminations++;
@@ -125,20 +136,28 @@ export class Monitor {
     }
   }
 
-  private checkCapture(killerId: string, survivorId: string): void {
+  private checkCapture(killerId: string, survivorId: string, atMs: number): void {
     const k = this.bot(killerId);
     const s = this.bot(survivorId);
     if (!k || !s) return;
+    const cap = DEFAULT_CAPTURE;
+    const lockMs = cap.lockSeconds * 1000;
+    // A capture is the end of a lock, and a lock takes the full duration of server time.
+    const started = this.lockStart.get(`${killerId}>${survivorId}`);
+    if (started === undefined) this.fail("capture", `${k.spec.name} captured ${s.spec.name} without a lock`);
+    else if (atMs - started < lockMs - 500)
+      this.fail("capture", `${k.spec.name} captured ${s.spec.name} ${(atMs - started) / 1000}s after the lock began (needs ${cap.lockSeconds}s)`);
+    // ...and the two really stayed together for that long (true positions, GPS noise allowed for).
     const sigma = Math.max(k.gps.sigmaM, s.gps.sigmaM, k.gps.burst?.sigmaM ?? 0, s.gps.burst?.sigmaM ?? 0);
-    const limit = DEFAULT_CAPTURE.captureRadiusM + DEFAULT_CAPTURE.accuracyAllowanceCapM + 4.2 * sigma;
-    let best = Infinity;
-    for (let t = Math.max(0, this.world.tSec - 9); t <= this.world.tSec; t++) {
+    const limit = cap.captureRadiusM * cap.lockExitFactor + cap.accuracyAllowanceCapM + 4.2 * sigma;
+    let worst = 0;
+    for (let t = Math.max(0, this.world.tSec - cap.lockSeconds); t <= this.world.tSec; t++) {
       const a = k.history[t];
       const b = s.history[t];
-      if (a && b) best = Math.min(best, haversineM(a, b));
+      if (a && b) worst = Math.max(worst, haversineM(a, b));
     }
-    if (best > limit)
-      this.fail("capture", `${k.spec.name} captured ${s.spec.name} but they were never closer than ${best.toFixed(0)} m (limit ${limit.toFixed(0)} m)`);
+    if (worst > limit)
+      this.fail("capture", `${k.spec.name} captured ${s.spec.name} but they were ${worst.toFixed(0)} m apart during the lock (limit ${limit.toFixed(0)} m)`);
   }
 
   private checkElimination(playerId: string): void {

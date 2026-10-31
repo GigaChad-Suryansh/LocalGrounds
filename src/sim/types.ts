@@ -36,8 +36,6 @@ export interface BotCtx {
 export interface Move {
   /** Where to walk, or null to stand still. */
   to: LatLng | null;
-  /** Survivor ids to try to tag this second (killers only). */
-  capture?: string[];
 }
 export type Behavior = (ctx: BotCtx) => Move;
 

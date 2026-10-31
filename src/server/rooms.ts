@@ -3,7 +3,6 @@ import { checkSample } from "../geo/freshness";
 import { DEFAULT_PHASES, RADIUS_PRESETS_M, type ZonePhaseConfig } from "../geo/zones";
 import {
   addPlayer,
-  attemptCapture,
   configureArena,
   confirmSafety,
   createGame,
@@ -15,7 +14,6 @@ import {
   GameRuleError,
   ingestLocation,
   InvalidTransitionError,
-  killerFacingOutcome,
   leaveGame,
   pauseGame,
   projectForViewer,
@@ -45,7 +43,6 @@ export interface ServiceOptions {
   maxRooms?: number;
   maxPlayersPerRoom?: number;
   minLocationIntervalMs?: number;
-  minCaptureIntervalMs?: number;
   /** Remove rooms with nobody connected after this long. */
   roomIdleTtlMs?: number;
   /** Remove finished rooms after this long. */
@@ -71,7 +68,6 @@ interface Room {
   tokens: Map<string, string>;
   conns: Map<string, Connection>;
   lastLocationMs: Map<string, number>;
-  lastCaptureMs: Map<string, number>;
   lastActivityMs: number;
   endedMs: number | null;
   /** Set once the final snapshot was sent and stored locations were wiped. */
@@ -95,7 +91,6 @@ export class RoomService {
       maxRooms: options.maxRooms ?? 200,
       maxPlayersPerRoom: options.maxPlayersPerRoom ?? 12,
       minLocationIntervalMs: options.minLocationIntervalMs ?? 500,
-      minCaptureIntervalMs: options.minCaptureIntervalMs ?? 300,
       roomIdleTtlMs: options.roomIdleTtlMs ?? 10 * 60_000,
       endedRoomTtlMs: options.endedRoomTtlMs ?? 2 * 60_000,
       phases: options.phases ?? DEFAULT_PHASES,
@@ -192,15 +187,6 @@ export class RoomService {
         return this.commit(room, confirmSafety(g, playerId));
       case "start":
         return this.commit(room, startGame(g, playerId, now));
-      case "capture": {
-        const last = room.lastCaptureMs.get(playerId);
-        if (last !== undefined && now - last < this.opts.minCaptureIntervalMs)
-          throw new ProtocolError("rate_limited", "Too many capture attempts.");
-        room.lastCaptureMs.set(playerId, now);
-        const r = attemptCapture(g, playerId, msg.survivorId, now);
-        conn.send({ t: "capture_result", outcome: killerFacingOutcome(r.outcome) });
-        return this.commit(room, r.state);
-      }
       case "pause":
         return this.commit(room, pauseGame(g, playerId, now));
       case "resume_match":
@@ -265,7 +251,6 @@ export class RoomService {
       tokens: new Map(),
       conns: new Map(),
       lastLocationMs: new Map([[playerId, now]]),
-      lastCaptureMs: new Map(),
       lastActivityMs: now,
       endedMs: null,
       scrubbed: false,
@@ -362,6 +347,7 @@ export class RoomService {
       maxPlayers: this.opts.maxPlayersPerRoom,
       radiusPresetsM: [...RADIUS_PRESETS_M],
       captureRadiusM: room.game.config.capture.captureRadiusM,
+      lockSeconds: room.game.config.capture.lockSeconds,
       revealIntervalMs: room.game.config.reveal.intervalMs,
       revealDurationMs: room.game.config.reveal.durationMs,
     };

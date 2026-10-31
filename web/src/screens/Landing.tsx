@@ -95,7 +95,7 @@ export function Landing({ initialCode }: { initialCode: string }) {
               <button key={r} type="button" role="radio" aria-checked={role === r} className={role === r ? "on" : ""} onClick={() => setRole(r)}>
                 <RoleMark role={r} size={26} />
                 <strong>{r === "killer" ? "Killer" : "Survivor"}</strong>
-                <small>{r === "killer" ? "Find survivors and tag them within 25 m." : "Stay hidden and inside the closing zone."}</small>
+                <small>{r === "killer" ? "Find survivors and hold a 4 s radar lock within 25 m." : "Stay hidden and inside the closing zone."}</small>
               </button>
             ))}
           </div>

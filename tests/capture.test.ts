@@ -2,12 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   createPlayer,
   validateProximity,
-  evaluateCapture,
-  killerFacingOutcome,
   DEFAULT_CAPTURE,
   type PlayerState,
   type Role,
-  type CaptureTracker,
 } from "../src/engine";
 import type { LatLng } from "../src/shared/types";
 import { CENTER, NOW, SEC, at } from "./helpers";
@@ -132,71 +129,6 @@ describe("capture requires reliable, fresh, consistent locations", () => {
       ok: false,
       reason: "suspicious_location",
       side: "survivor",
-    });
-  });
-});
-
-describe("capture tracker (needs consecutive distinct sample pairs)", () => {
-  const withTs = (p: PlayerState, tsMs: number): PlayerState =>
-    ({ ...p, sample: { ...(p.sample as NonNullable<PlayerState["sample"]>), timestampMs: tsMs } });
-
-  it("needs two distinct in-range sample pairs and doesn't double-count one", () => {
-    let t: CaptureTracker = {};
-    const k = killer();
-    const s = survivorAt(10);
-
-    let r = evaluateCapture(t, k, s, NOW_CHECK);
-    expect(r.outcome).toEqual({ status: "pending", hits: 1, required: 2 });
-    t = r.tracker;
-
-    r = evaluateCapture(t, k, s, NOW_CHECK + 100); // same samples again
-    expect(r.outcome).toEqual({ status: "pending", hits: 1, required: 2 });
-    t = r.tracker;
-
-    r = evaluateCapture(t, withTs(k, NOW + 2 * SEC), withTs(s, NOW + 2 * SEC), NOW + 3 * SEC);
-    expect(r.outcome).toEqual({ status: "captured" });
-    expect(r.tracker).toEqual({});
-  });
-
-  it("resets progress when the survivor gets out of range", () => {
-    const k = killer();
-    let r = evaluateCapture({}, k, survivorAt(10), NOW_CHECK);
-    expect(r.outcome.status).toBe("pending");
-    r = evaluateCapture(r.tracker, withTs(k, NOW + 2 * SEC), withTs(survivorAt(60), NOW + 2 * SEC), NOW + 3 * SEC);
-    expect(r.outcome).toMatchObject({ status: "rejected", reason: "out_of_range" });
-    r = evaluateCapture(r.tracker, withTs(k, NOW + 4 * SEC), withTs(survivorAt(10), NOW + 4 * SEC), NOW + 5 * SEC);
-    expect(r.outcome).toEqual({ status: "pending", hits: 1, required: 2 });
-  });
-
-  it("a single hit captures when requiredHits is 1", () => {
-    const cfg = { ...DEFAULT_CAPTURE, requiredHits: 1 };
-    expect(evaluateCapture({}, killer(), survivorAt(10), NOW_CHECK, cfg).outcome).toEqual({
-      status: "captured",
-    });
-  });
-});
-
-describe("what the killer is told", () => {
-  it("hides survivor-side and distance information behind a generic miss", () => {
-    const miss = { status: "miss" };
-    expect(killerFacingOutcome({ status: "rejected", reason: "out_of_range" })).toEqual(miss);
-    expect(killerFacingOutcome({ status: "rejected", reason: "stale_location", side: "survivor" })).toEqual(miss);
-    expect(killerFacingOutcome({ status: "rejected", reason: "survivor_inactive" })).toEqual(miss);
-  });
-
-  it("tells the killer about their own problems and passes successes through", () => {
-    expect(
-      killerFacingOutcome({ status: "rejected", reason: "stale_location", side: "killer" }),
-    ).toEqual({ status: "rejected", reason: "stale_location" });
-    expect(killerFacingOutcome({ status: "rejected", reason: "match_not_active" })).toEqual({
-      status: "rejected",
-      reason: "match_not_active",
-    });
-    expect(killerFacingOutcome({ status: "captured" })).toEqual({ status: "captured" });
-    expect(killerFacingOutcome({ status: "pending", hits: 1, required: 2 })).toEqual({
-      status: "pending",
-      hits: 1,
-      required: 2,
     });
   });
 });

@@ -258,7 +258,17 @@ input[type="text"], input:not([type]), .field input {
 .where.tone-ok { color: var(--terrain-ink); }
 .where.tone-warn { color: var(--signal-ink); }
 .where.tone-bad { color: var(--hazard-ink); }
-.btn.tag { min-width: 128px; min-height: 76px; font-size: 36px; border-radius: 14px; margin-bottom: 36px; box-shadow: 0 0 28px rgba(34, 228, 255, 0.55); }
+.alert.lock { position: relative; display: grid; grid-template-columns: 1fr auto; row-gap: 6px; min-width: min(86vw, 330px); padding-bottom: 12px; }
+.alert.lock .lock-text { display: grid; gap: 1px; }
+.alert.lock .lock-text span { font-size: 13px; color: var(--dim); }
+.alert.lock.is-killer { border-color: var(--signal); }
+.alert.lock.is-killer strong, .alert.lock.is-killer .clock { color: var(--signal-ink); }
+.alert.lock.is-survivor { border-color: var(--hazard); background: color-mix(in srgb, var(--hazard) 16%, var(--panel-solid)); animation: blink 0.8s steps(2, jump-none) infinite; }
+.alert.lock.is-survivor strong, .alert.lock.is-survivor .clock { color: var(--hazard-ink); }
+.lockbar { grid-column: 1 / -1; height: 6px; background: var(--rule); overflow: hidden; }
+.lockbar i { display: block; height: 100%; background: var(--signal); transform-origin: left; transition: transform 0.25s linear; }
+.alert.lock.is-survivor .lockbar i { background: var(--hazard); }
+
 .game .leaflet-bottom.leaflet-right { bottom: 132px; }
 
 .edge { position: absolute; inset: 0; z-index: 550; pointer-events: none; }
@@ -340,6 +350,7 @@ body:has(.end) .banners, body:has(.splash) .banners { display: none; }
   .flash { display: none; }
   body.shake .game, body.shake .end { animation: none; }
   .lg-pin.is-enemy .ring { opacity: 1; transform: scale(0.7); }
-  .hud-card.scan .bar i, .hp i { transition: none; }
+  .hud-card.scan .bar i, .hp i, .lockbar i { transition: none; }
+  .alert.lock.is-survivor { animation: none; }
 }
 @keyframes banner-still { 0%, 92% { opacity: 1; } 100% { opacity: 0; } }

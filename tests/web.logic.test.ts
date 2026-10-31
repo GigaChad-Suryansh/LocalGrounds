@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { projectForViewer, type GameEvent, type MatchEndReason } from "../src/engine";
+import { projectForViewer, tickGame, type GameEvent, type MatchEndReason } from "../src/engine";
 import { distanceToCenterM } from "../src/geo/boundary";
 import type { ServerMessage } from "../src/server/protocol";
 import {
   canHost, fixTimestamp, gpsErrorState, gpsProblemText, gpsQuality, HOST_MAX_ACCURACY_M, planTick, QUIET_MS,
   STATIONARY_MAX_MS, toReport,
 } from "../web/src/lib/gps";
-import { captureRejectionText, captureResultFx, fxForEvent, type FxContext } from "../web/src/lib/fx";
+import { fxForEvent, type FxContext } from "../web/src/lib/fx";
+import { lockView } from "../web/src/lib/lock";
 import { matchOutcome, outcomeCopy } from "../web/src/lib/outcome";
 import { standing } from "../web/src/lib/standing";
 import { formatClock, progress, remainingMs } from "../web/src/lib/time";
@@ -220,7 +221,7 @@ describe("game events become feedback", () => {
       kind: "caught", tone: "danger", shake: true, sound: "caught",
     });
     expect(fxForEvent(ev({ type: "captured", killerId: "me", survivorId: "s" }), ctx("killer"))).toMatchObject({
-      kind: "tagged", tone: "good", title: "Tagged",
+      kind: "tagged", tone: "good", title: "Target captured",
     });
     expect(fxForEvent(ev({ type: "captured", killerId: "k", survivorId: "s" }), ctx())).toMatchObject({
       kind: "capture_other", title: "Sam caught",
@@ -268,18 +269,24 @@ describe("game events become feedback", () => {
     const all = [
       fxForEvent(ev({ type: "captured", killerId: "k", survivorId: "me" }), ctx()),
       fxForEvent(ev({ type: "reveal_started", index: 1, durationMs: 15_000 }), ctx()),
-      captureResultFx({ status: "miss" }),
+      fxForEvent(ev({ type: "lock_started", targetId: "s" }), ctx("killer")),
+      fxForEvent(ev({ type: "radar_locked_on" }), ctx()),
     ];
     expect(JSON.stringify(all)).not.toMatch(/lat|lng|accuracy/i);
   });
 
-  it("gives the killer feedback on a tag attempt without leaking anything about the target", () => {
-    expect(captureResultFx({ status: "captured" })).toBeNull(); // announced by the capture event
-    expect(captureResultFx({ status: "pending", hits: 1, required: 2 })).toMatchObject({ kind: "lock", subtitle: "Hold position: 1 of 2." });
-    expect(captureResultFx({ status: "miss" })).toMatchObject({ kind: "miss", title: "No contact" });
-    expect(captureResultFx({ status: "rejected", reason: "stale_location" })?.subtitle).toMatch(/stale/);
-    expect(captureRejectionText("suspicious_location")).toMatch(/jumped/);
-    expect(captureRejectionText("out_of_range")).toBe("Try again in a moment.");
+  it("Radar Lock feedback: killer sees detected/lost/captured, survivor sees a warning that names nobody", () => {
+    const k = ctx("killer");
+    expect(fxForEvent(ev({ type: "lock_started", targetId: "s" }), k)).toMatchObject({ kind: "lock_started", title: "Target detected" });
+    expect(fxForEvent(ev({ type: "lock_lost", targetId: "s", reason: "out_of_range" }), k)).toMatchObject({ title: "Target lost" });
+    expect(fxForEvent(ev({ type: "lock_lost", targetId: "s", reason: "signal" }), k)?.subtitle).toMatch(/GPS/);
+    expect(fxForEvent(ev({ type: "lock_lost", targetId: "s", reason: "inactive" }), k)).toBeNull(); // the capture event says it
+    expect(fxForEvent(ev({ type: "captured", killerId: "me", survivorId: "s" }), k)).toMatchObject({ title: "Target captured" });
+
+    const warn = fxForEvent(ev({ type: "radar_locked_on" }), ctx());
+    expect(warn).toMatchObject({ kind: "radar_locked_on", title: "Radar lock detected", tone: "danger", sound: "alarm" });
+    expect(warn?.vibrate?.length).toBeGreaterThan(0);
+    expect(fxForEvent(ev({ type: "radar_lock_cleared" }), ctx())).toMatchObject({ tone: "good" });
   });
 });
 
@@ -291,7 +298,7 @@ describe("client state reducer", () => {
 
   const room = {
     code: "ABCDE", hostId: "k1", maxPlayers: 12, radiusPresetsM: [30, 75, 150, 300],
-    captureRadiusM: 25, revealIntervalMs: 120_000, revealDurationMs: 15_000,
+    captureRadiusM: 25, lockSeconds: 4, revealIntervalMs: 120_000, revealDurationMs: 15_000,
   };
 
   const snapshotMsg = (viewer = "s1"): ServerMessage => ({
@@ -352,13 +359,11 @@ describe("client state reducer", () => {
     expect(s.lastSeq).toBe(0);
   });
 
-  it("shows tag attempts as feedback, and a successful tag only through the capture event", () => {
-    let s = reduce(ready(), server({ t: "capture_result", outcome: { status: "pending", hits: 1, required: 2 } }));
-    expect(s.fx.at(-1)?.kind).toBe("lock");
-    const n = s.fx.length;
-    s = reduce(s, server({ t: "capture_result", outcome: { status: "captured" } }));
-    expect(s.fx).toHaveLength(n);
-    expect(s.captureResult?.outcome).toEqual({ status: "captured" });
+  it("turns lock events into banners for the right player", () => {
+    let s = reduce(ready(), server(event(1, { type: "lock_started", targetId: "s2" })));
+    expect(s.fx.at(-1)?.kind).toBe("lock_started");
+    s = reduce(s, server(event(2, { type: "lock_lost", targetId: "s2", reason: "out_of_range" })));
+    expect(s.fx.at(-1)?.kind).toBe("lock_lost");
   });
 
   it("records errors and location acknowledgements", () => {
@@ -389,5 +394,53 @@ describe("client state reducer", () => {
     expect(s.snapshot).toBeNull();
     expect(s.gps).toEqual({ state: "active", accuracyM: 6, at: 1 });
     expect(s.net).toBe("open");
+  });
+});
+
+// ------------------------------------------------------------------ radar lock view
+
+describe("lockView", () => {
+  const lockedGame = () => {
+    let g = activeGame({
+      phases: LONG_PHASES,
+      roster: [
+        { id: "k1", role: "killer", pos: [180, 3] },
+        { id: "s1", role: "survivor", pos: [0, 15] },
+        { id: "s2", role: "survivor", pos: [90, 120] },
+      ],
+    });
+    for (let t = 1; t <= 3; t++) g = tickGame(touch(g, t), NOW + t * SEC); // lock at 2000 ms
+    return g;
+  };
+  const snapFor = (id: string, g = lockedGame()) => projectForViewer(g, id, NOW + 3 * SEC);
+
+  it("shows the killer their target, and fills smoothly between snapshots", () => {
+    const v = lockView(snapFor("k1"), 10_000, 10_500, false);
+    expect(v).toMatchObject({ side: "killer", targetName: "s1", paused: false });
+    expect(v!.progress).toBeCloseTo(2500 / 4000, 5);
+    expect(v!.remainingMs).toBe(1500);
+  });
+
+  it("never runs past 100% or backwards", () => {
+    expect(lockView(snapFor("k1"), 10_000, 99_000, false)!.progress).toBe(1);
+    expect(lockView(snapFor("k1"), 10_000, 5_000, false)!.progress).toBeCloseTo(0.5, 5);
+  });
+
+  it("freezes while the match is paused", () => {
+    expect(lockView(snapFor("k1"), 10_000, 14_000, true)!.progress).toBeCloseTo(0.5, 5);
+  });
+
+  it("gives a locked survivor progress only, with no killer name", () => {
+    const v = lockView(snapFor("s1"), 10_000, 10_000, false)!;
+    expect(v.side).toBe("survivor");
+    expect(v.targetName).toBeNull();
+    expect(v.progress).toBeCloseTo(0.5, 5);
+  });
+
+  it("shows nothing to bystanders or to players who are out", () => {
+    expect(lockView(snapFor("s2"), 10_000, 10_000, false)).toBeNull();
+    const g = lockedGame();
+    const out = { ...g, players: { ...g.players, s1: { ...g.players.s1!, status: "captured" as const } } };
+    expect(lockView(projectForViewer(out, "s1", NOW + 3 * SEC), 10_000, 10_000, false)).toBeNull();
   });
 });

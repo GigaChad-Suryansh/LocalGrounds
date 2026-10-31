@@ -153,7 +153,7 @@ export class SimWorld {
   }
 
   /** Move every bot, send GPS, let killers tag, then tick the server. */
-  step(act: (bot: SimBot) => { to: LatLng | null; capture?: string[] }): void {
+  step(act: (bot: SimBot) => { to: LatLng | null }): void {
     this.tSec += 1;
     this.nowMs += 1000;
     const moves = this.bots.map((b) => ({ b, m: act(b) }));
@@ -167,9 +167,8 @@ export class SimWorld {
       }
       b.history[this.tSec] = b.truth;
     }
-    for (const { b, m } of moves) {
+    for (const { b } of moves) {
       this.report(b);
-      if (b.connected) for (const id of m.capture ?? []) this.send(b, { t: "capture", survivorId: id });
     }
     this.svc.tick();
   }

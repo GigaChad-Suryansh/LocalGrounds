@@ -69,6 +69,18 @@ export interface SelfView {
   redZone: { status: string; hp: number; graceRemainingMs: number | null };
 }
 
+/**
+ * Radar Lock as the viewer may see it. Killers see their own locks; a locked survivor sees only
+ * that a lock exists and how full it is (never who, never where from). Progress is server time.
+ */
+export interface RadarView {
+  lockMs: number;
+  rangeM: number;
+  lockedOn: Array<{ survivorId: string; progressMs: number; paused: boolean }>;
+  /** Deliberately without `paused`: a survivor shouldn't learn about the killer's GPS state. */
+  lockedBy: { progressMs: number } | null;
+}
+
 export interface ViewerSnapshot {
   serverTimeMs: number;
   matchPhase: MatchPhase;
@@ -78,6 +90,7 @@ export interface ViewerSnapshot {
   /** Zone state is public: everyone sees the safe zone and its countdown. */
   zone: ZoneState | null;
   reveal: RevealState | null;
+  radar: RadarView;
   self: SelfView;
   others: OtherPlayerView[];
 }
@@ -155,6 +168,20 @@ export function projectForViewer(
     },
   };
 
+  const cap = state.config.capture;
+  const lockLive = state.match.phase === "active" || state.match.phase === "paused";
+  const mine = lockLive && viewer.status === "active" ? Object.values(state.locks) : [];
+  const radar: RadarView = {
+    lockMs: cap.lockSeconds * 1000,
+    rangeM: cap.captureRadiusM,
+    lockedOn: mine
+      .filter((l) => l.killerId === viewer.id)
+      .map((l) => ({ survivorId: l.survivorId, progressMs: l.progressMs, paused: l.paused })),
+    lockedBy: null,
+  };
+  const onMe = mine.filter((l) => l.survivorId === viewer.id).sort((a, b) => b.progressMs - a.progressMs)[0];
+  if (onMe) radar.lockedBy = { progressMs: onMe.progressMs };
+
   return {
     serverTimeMs: nowMs,
     matchPhase: state.match.phase,
@@ -163,6 +190,7 @@ export function projectForViewer(
     outer: state.match.outer,
     zone: currentZone(state.match, nowMs),
     reveal,
+    radar,
     self,
     others,
   };

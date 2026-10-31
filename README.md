@@ -88,6 +88,21 @@ Browsers only allow geolocation on **HTTPS or localhost**, so to test on phones 
 those hosts if you restrict the network. Stationary phones often stop emitting GPS updates, so the
 client re-confirms the last fix for up to 45 s before letting the signal show as lost.
 
+## Radar Lock (capture)
+
+A killer no longer taps to tag. When a killer is within the capture range (25 m, host-adjustable) of an
+active survivor, the **server** starts a lock and fills it over 4 s of server time (`captureConfig.lockSeconds`).
+
+- Entering range starts the lock; leaving range cancels it and progress goes back to 0. A running lock tolerates
+  GPS jitter (it only breaks beyond 1.2x the range), and accuracy is forgiven by at most 10 m, as before.
+- Bad, stale or suspicious location data pauses the lock (progress held), and cancels it after 3 s. A lock only advances
+  while both samples are at most 2 s old, so silence can never complete one.
+- Only the server steps locks (`src/engine/radarLock.ts`, from the tick and after each location report); there is no client
+  capture message at all. The first lock to reach 100% captures the survivor; other locks on them end. Pause/resume
+  doesn't count towards a lock. Scans (reveals) and red zones are independent of it.
+- Killers see `TARGET DETECTED` with a progress bar, `TARGET LOST`, `TARGET CAPTURED`. A locked survivor sees
+  `RADAR LOCK DETECTED` with vibration and sound, and only the progress: never who or where the killer is.
+
 ## Simulation and field testing
 
 ```

@@ -17,15 +17,27 @@ export interface CaptureConfig {
   accuracyAllowanceCapM: number;
   /** Killer and survivor samples must have been taken within this many ms of each other. */
   maxSampleSkewMs: number;
-  /** Distinct in-range sample pairs needed before a capture succeeds. */
-  requiredHits: number;
+  /** Radar Lock: how long a killer must stay in range, in seconds. */
+  lockSeconds: number;
+  /** A running lock survives until the pair is this many times the capture radius apart (GPS jitter). */
+  lockExitFactor: number;
+  /** A lock only advances while both samples are at most this old. */
+  lockMaxSampleAgeMs: number;
+  /** A lock paused by bad or stale location data is cancelled after this long. */
+  lockSignalGraceMs: number;
+  /** One evaluation never adds more than this much progress, whatever the gap since the last one. */
+  lockMaxStepMs: number;
 }
 
 export const DEFAULT_CAPTURE: CaptureConfig = {
   captureRadiusM: 25,
   accuracyAllowanceCapM: 10,
   maxSampleSkewMs: 8_000,
-  requiredHits: 2,
+  lockSeconds: 4,
+  lockExitFactor: 1.2,
+  lockMaxSampleAgeMs: 2_000,
+  lockSignalGraceMs: 3_000,
+  lockMaxStepMs: 2_000,
 };
 
 export type CaptureRejection =
@@ -112,88 +124,4 @@ export function validateProximity(
     killerSampleMs: ks.timestampMs,
     survivorSampleMs: ss.timestampMs,
   };
-}
-
-/** Per killer>survivor pair: consecutive in-range checks on distinct sample pairs. */
-export type CaptureTracker = Record<
-  string,
-  { hits: number; lastKillerMs: number; lastSurvivorMs: number }
->;
-
-export type CaptureOutcome =
-  | { status: "captured" }
-  | { status: "pending"; hits: number; required: number }
-  | { status: "rejected"; reason: CaptureRejection; side?: Side };
-
-export function evaluateCapture(
-  tracker: CaptureTracker,
-  killer: PlayerState,
-  survivor: PlayerState,
-  nowMs: number,
-  cfg: CaptureConfig = DEFAULT_CAPTURE,
-  freshness: FreshnessPolicy = DEFAULT_FRESHNESS,
-): { tracker: CaptureTracker; outcome: CaptureOutcome } {
-  const key = `${killer.id}>${survivor.id}`;
-  const result = validateProximity(killer, survivor, nowMs, cfg, freshness);
-
-  if (!result.ok) {
-    const { [key]: _dropped, ...rest } = tracker;
-    const outcome: CaptureOutcome = result.side
-      ? { status: "rejected", reason: result.reason, side: result.side }
-      : { status: "rejected", reason: result.reason };
-    return { tracker: rest, outcome };
-  }
-
-  const prev = tracker[key];
-  const required = Math.max(1, cfg.requiredHits);
-
-  // Same sample pair as last time: no new information, don't count it twice.
-  if (
-    prev &&
-    prev.lastKillerMs === result.killerSampleMs &&
-    prev.lastSurvivorMs === result.survivorSampleMs
-  ) {
-    return { tracker, outcome: { status: "pending", hits: prev.hits, required } };
-  }
-
-  const hits = (prev?.hits ?? 0) + 1;
-  if (hits >= required) {
-    const { [key]: _done, ...rest } = tracker;
-    return { tracker: rest, outcome: { status: "captured" } };
-  }
-  return {
-    tracker: {
-      ...tracker,
-      [key]: {
-        hits,
-        lastKillerMs: result.killerSampleMs,
-        lastSurvivorMs: result.survivorSampleMs,
-      },
-    },
-    outcome: { status: "pending", hits, required },
-  };
-}
-
-export type KillerFacingOutcome =
-  | { status: "captured" }
-  | { status: "pending"; hits: number; required: number }
-  | { status: "miss" }
-  | { status: "rejected"; reason: CaptureRejection };
-
-/**
- * What the killer's client is told. Anything about the survivor's side or the
- * distance collapses to a generic "miss" so repeated attempts reveal nothing
- * beyond "someone is within capture range" (which a successful tag implies anyway).
- */
-export function killerFacingOutcome(outcome: CaptureOutcome): KillerFacingOutcome {
-  if (outcome.status !== "rejected") return outcome;
-  if (outcome.side === "killer") return { status: "rejected", reason: outcome.reason };
-  switch (outcome.reason) {
-    case "match_not_active":
-    case "not_a_killer":
-    case "killer_inactive":
-      return { status: "rejected", reason: outcome.reason };
-    default:
-      return { status: "miss" };
-  }
 }

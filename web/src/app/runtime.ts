@@ -86,7 +86,6 @@ export const actions = {
   configure: (c: { radiusM?: number; captureRadiusM?: number }) => conn.send({ t: "configure", ...c }),
   confirmSafety: () => conn.send({ t: "confirm_safety" }),
   start: () => conn.send({ t: "start" }),
-  capture: (survivorId: string) => conn.send({ t: "capture", survivorId }),
   pause: () => conn.send({ t: "pause" }),
   resumeMatch: () => conn.send({ t: "resume_match" }),
   end: () => conn.send({ t: "end" }),

@@ -85,15 +85,10 @@ describe("client message parsing", () => {
     ]);
   });
 
-  it("validates ready, capture and configure", () => {
+  it("validates ready and configure", () => {
     expect(parseClientMessage({ t: "ready", ready: true }).ok).toBe(true);
     bad({ t: "ready", ready: "true" });
 
-    expect(parseClientMessage({ t: "capture", survivorId: "p_ab12cd34" }).ok).toBe(true);
-    bad({ t: "capture", survivorId: "../etc" });
-    bad({ t: "capture", survivorId: "" });
-    bad({ t: "capture", survivorId: "x".repeat(33) });
-    bad({ t: "capture" });
 
     expect(parseClientMessage({ t: "configure", radiusM: 75, captureRadiusM: 12 }).ok).toBe(true);
     expect(parseClientMessage({ t: "configure" }).ok).toBe(true);
@@ -101,9 +96,10 @@ describe("client message parsing", () => {
     bad({ t: "configure", captureRadiusM: "big" });
   });
 
-  it("captures carry no killer id: the server derives it from the connection", () => {
-    const r = parseClientMessage({ t: "capture", survivorId: "p_1", killerId: "p_admin" });
-    expect(r.ok && r.msg.t === "capture" ? Object.keys(r.msg).sort() : null).toEqual(["survivorId", "t"]);
+  it("has no capture message: a lock is never completed or started by a client", () => {
+    bad({ t: "capture", survivorId: "p_1" });
+    bad({ t: "lock", survivorId: "p_1" });
+    bad({ t: "captured", survivorId: "p_1" });
   });
 
   it("accepts the parameterless commands", () => {

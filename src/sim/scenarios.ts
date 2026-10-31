@@ -70,16 +70,17 @@ export const SCENARIOS: Scenario[] = [
   {
     ...base,
     name: "gps-spoofer",
-    description: "A survivor's phone reports a spot 800 m away for 20 s. They are still inside, so they must not be eliminated.",
-    bots: [killer(), survivor("Spoof", 180, 25, hide, { spoof: { atS: 100, forS: 20, jumpM: 800 } }), survivor("Sam", 90, 25)],
-    expect: (r) => (r.eliminated.includes("Spoof") ? ["a spoofed jump got an inside player eliminated"] : []),
+    description: "A survivor's GPS glitches and teleports them 800 m away for 4 s (inside the red-zone grace period). They must not be eliminated.",
+    timeoutOk: true,
+    bots: [idleKiller(), survivor("Spoof", 180, 70, hide, { spoof: { atS: 100, forS: 4, jumpM: 800 } }), survivor("Sam", 90, 60)],
+    expect: (r) => (r.eliminated.includes("Spoof") ? ["a brief GPS teleport got an inside player eliminated"] : []),
   },
   {
     ...base,
     name: "dropped-connections",
     description: "Phones lose signal and resume with their token; the match carries on and nobody is lost.",
     timeoutOk: true,
-    bots: [idleKiller(), survivor("Sam", 180, 30), survivor("Cam", 90, 25)],
+    bots: [idleKiller(), survivor("Sam", 180, 70), survivor("Cam", 90, 60)],
     script: [
       { atSec: 80, run: (w) => { w.disconnect(w.bots[1]!); w.disconnect(w.bots[2]!); } },
       { atSec: 110, run: (w) => { w.reconnect(w.bots[1]!); w.reconnect(w.bots[2]!); } },
@@ -96,7 +97,7 @@ export const SCENARIOS: Scenario[] = [
     name: "emergency-pause",
     description: "A survivor pauses at 90 s. A non-host can't resume; the host does. The match is frozen in between.",
     timeoutOk: true,
-    bots: [idleKiller(), survivor("Sam", 180, 30), survivor("Cam", 90, 25)],
+    bots: [idleKiller(), survivor("Sam", 180, 70), survivor("Cam", 90, 60)],
     script: [
       { atSec: 90, run: (w) => w.send(w.bots[1]!, { t: "pause" }) },
       { atSec: 100, run: (w) => w.send(w.bots[1]!, { t: "resume_match" }) },
@@ -114,7 +115,7 @@ export const SCENARIOS: Scenario[] = [
     name: "host-leaves",
     description: "The host (a killer) walks away mid-match. The room must stay consistent and never end up with no host.",
     timeoutOk: true,
-    bots: [idleKiller(), idleKiller("Kit", { bearing: 45, distanceM: 20 }), survivor("Sam", 180, 30), survivor("Cam", 90, 25)],
+    bots: [idleKiller(), idleKiller("Kit", { bearing: 45, distanceM: 20 }), survivor("Sam", 180, 70), survivor("Cam", 90, 60)],
     script: [{ atSec: 120, run: (w) => w.send(w.host(), { t: "leave" }) }],
     expect: (r, w) => {
       const f: string[] = [];

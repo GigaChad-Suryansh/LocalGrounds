@@ -180,7 +180,6 @@ describe("creating and joining rooms", () => {
       { t: "ready", ready: true },
       { t: "start" },
       { t: "location", report: loc(CENTER) },
-      { t: "capture", survivorId: "p_1" },
       { t: "pause" },
     ] satisfies ClientMessage[]) {
       w.send(stray, msg);
@@ -257,18 +256,6 @@ describe("host controls and start rules", () => {
 });
 
 describe("identity comes from the connection, never from the message", () => {
-  it("a survivor sending a capture is rejected as not-a-killer", () => {
-    const w = world();
-    const { h, s } = startedDuel(w, at(0, 10));
-    move(w, 1, [h, CENTER], [s, at(0, 10)]);
-    w.send(s, { t: "capture", survivorId: h.playerId });
-    expect(s.conn.last("capture_result")?.outcome).toEqual({
-      status: "rejected",
-      reason: "not_a_killer",
-    });
-    expect(snap(h).snapshot.self.status).toBe("active");
-  });
-
   it("a token resumes only its own player", () => {
     const w = world();
     const h = host(w);
@@ -363,20 +350,33 @@ describe("what each client is allowed to receive", () => {
   });
 });
 
-describe("capturing through the service", () => {
-  it("is decided by the server from the stored locations and ends the match", () => {
+describe("Radar Lock through the service", () => {
+  const progress = (c: Client, who: "killer" | "survivor"): number | null =>
+    who === "killer"
+      ? (snap(c).snapshot.radar.lockedOn[0]?.progressMs ?? null)
+      : (snap(c).snapshot.radar.lockedBy?.progressMs ?? null);
+
+  it("fills by server time, shows the same progress to both clients, and ends the match", () => {
     const w = world();
     const near = at(0, 10);
     const { h, s } = startedDuel(w, near);
 
-    move(w, 1, [h, CENTER], [s, near]);
-    w.send(h, { t: "capture", survivorId: s.playerId });
-    expect(h.conn.last("capture_result")?.outcome).toEqual({ status: "pending", hits: 1, required: 2 });
+    const seen: Array<number | null> = [];
+    for (let i = 0; i < 4; i++) {
+      move(w, 1, [h, CENTER], [s, near]);
+      w.svc.tick();
+      expect(snap(h).snapshot.matchPhase).toBe("active");
+      seen.push(progress(h, "killer"));
+      expect(progress(s, "survivor")).toBe(progress(h, "killer")); // clients agree
+    }
+    expect(seen).toEqual([0, 1000, 2000, 3000]);
+    expect(snap(h).snapshot.radar.lockMs).toBe(4000);
+    expect(h.conn.events().map((e) => e.type)).toContain("lock_started");
+    expect(s.conn.events().map((e) => e.type)).toContain("radar_locked_on");
+    expect(snap(s).snapshot.self.status).toBe("active");
 
     move(w, 1, [h, CENTER], [s, near]);
-    w.send(h, { t: "capture", survivorId: s.playerId });
-    expect(h.conn.last("capture_result")?.outcome).toEqual({ status: "captured" });
-
+    w.svc.tick();
     expect(snap(h).snapshot.matchPhase).toBe("ended");
     expect(snap(h).snapshot.endReason).toBe("all_captured");
     expect(snap(s).snapshot.self.status).toBe("captured");
@@ -385,18 +385,26 @@ describe("capturing through the service", () => {
     );
   });
 
-  it("answers a failed attempt with a generic miss, whatever the real reason", () => {
+  it("cannot be completed by silence: stale locations never capture", () => {
     const w = world();
-    const { h, s } = startedDuel(w); // 100 m apart
-    move(w, 1, [h, CENTER], [s, at(180, 100)]);
-    w.send(h, { t: "capture", survivorId: s.playerId });
-    expect(h.conn.last("capture_result")?.outcome).toEqual({ status: "miss" });
-    w.send(h, { t: "capture", survivorId: "p_unknown" });
-    // (second attempt in the same instant is rate limited)
-    expect(lastError(h)).toMatchObject({ code: "rate_limited" });
-    w.advance(1);
-    w.send(h, { t: "capture", survivorId: "p_unknown" });
-    expect(h.conn.last("capture_result")?.outcome).toEqual({ status: "miss" });
+    const near = at(0, 10);
+    const { h, s } = startedDuel(w, near);
+    move(w, 1, [h, CENTER], [s, near]);
+    w.svc.tick();
+    for (let i = 0; i < 30; i++) {
+      w.advance(1);
+      w.svc.tick();
+    }
+    expect(snap(s).snapshot.self.status).toBe("active");
+    expect(snap(h).snapshot.radar.lockedOn).toEqual([]);
+  });
+
+  it("a client has no way to claim a capture", () => {
+    const w = world();
+    const { h, s } = startedDuel(w, at(0, 10));
+    w.send(h, { t: "capture", survivorId: s.playerId } as unknown as ClientMessage);
+    w.send(h, { t: "captured", survivorId: s.playerId } as unknown as ClientMessage);
+    expect(snap(s).snapshot.self.status).toBe("active");
   });
 });
 

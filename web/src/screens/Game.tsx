@@ -6,6 +6,7 @@ import { actions } from "../app/runtime";
 import { isMuted, setMuted } from "../device/sound";
 import { ArenaMap } from "../components/ArenaMap";
 import { Check, GpsChip, RoleMark, roleLabel, useArmed } from "../components/ui";
+import { lockView, type LockView } from "../lib/lock";
 import { standing } from "../lib/standing";
 import { formatClock, progress, remainingMs } from "../lib/time";
 import { buildMapView } from "../map/view";
@@ -60,29 +61,24 @@ function Menu(props: {
   );
 }
 
-function TagSheet({ snapshot, onClose }: { snapshot: ViewerSnapshot; onClose: () => void }) {
-  const targets = snapshot.others.filter((o) => o.role === "survivor" && o.status === "active");
+/** Radar Lock progress. Killers see their target; a locked survivor sees only that a lock is closing. */
+function LockCard({ lock }: { lock: LockView }) {
+  const secs = Math.ceil(lock.remainingMs / 1000);
+  const killer = lock.side === "killer";
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-label="Tag a survivor" onClick={onClose}>
-      <div className="panel" onClick={(e) => e.stopPropagation()}>
-        <h2 className="h-sm">Who are you tagging?</h2>
-        <p className="help">Stand within tagging distance of them, then pick their name. Both of your GPS fixes must be fresh.</p>
-        {targets.length === 0 ? (
-          <p>No survivors left.</p>
-        ) : (
-          <ul className="targets">
-            {targets.map((t) => (
-              <li key={t.id}>
-                <button className="btn" onClick={() => { actions.capture(t.id); onClose(); }}>
-                  <RoleMark role="survivor" size={22} />
-                  <span>{t.name}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button className="btn quiet" onClick={onClose}>Cancel</button>
+    <div className={`alert lock ${killer ? "is-killer" : "is-survivor"}`} role={killer ? "status" : "alert"}>
+      <div className="lock-text">
+        <strong>{killer ? "Target detected" : "Radar lock detected"}</strong>
+        <span>
+          {lock.paused
+            ? "Waiting for a good GPS signal"
+            : killer
+              ? `${lock.targetName ?? "Survivor"}: stay in range`
+              : "Get out of range to break it"}
+        </span>
       </div>
+      <span className="clock" aria-label={`${Math.round(lock.progress * 100)} percent`}>{lock.paused ? "..." : `${secs}s`}</span>
+      <div className="lockbar" aria-hidden="true"><i style={{ transform: `scaleX(${lock.progress})` }} /></div>
     </div>
   );
 }
@@ -91,7 +87,6 @@ export function Game({ snapshot, room, receivedAt }: Props) {
   const { gps } = useGame();
   const now = useNow();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [tagOpen, setTagOpen] = useState(false);
   const [follow, setFollow] = useState(false);
   const [fitNonce, setFitNonce] = useState(0);
 
@@ -137,6 +132,7 @@ export function Game({ snapshot, room, receivedAt }: Props) {
   const danger = me.redZone.status === "warning" || me.redZone.status === "penalized";
   const gpsOff = gps.state !== "active" && gps.state !== "requesting";
   const gpsWeak = me.locationIssues.length > 0;
+  const lock = lockView(snapshot, receivedAt, now, paused);
 
   return (
     <main className={`game${paused ? " is-paused" : ""}`}>
@@ -170,6 +166,7 @@ export function Game({ snapshot, room, receivedAt }: Props) {
       </header>
 
       <div className="alerts">
+        {lock && <LockCard lock={lock} />}
         {me.redZone.status === "warning" && grace !== null && (
           <div className="alert danger" role="alert">
             <strong>Return to the safe zone</strong>
@@ -199,9 +196,6 @@ export function Game({ snapshot, room, receivedAt }: Props) {
           <GpsChip accuracyM={me.position?.accuracyM ?? null} issues={me.locationIssues} />
           {where && <span className={`where tone-${where.tone}`}>{where.text}</span>}
         </div>
-        {me.role === "killer" && !out && !paused && (
-          <button className="btn primary tag" onClick={() => setTagOpen(true)}>Tag</button>
-        )}
       </footer>
 
       {out && !paused && (
@@ -235,7 +229,6 @@ export function Game({ snapshot, room, receivedAt }: Props) {
           onClose={() => setMenuOpen(false)}
         />
       )}
-      {tagOpen && <TagSheet snapshot={snapshot} onClose={() => setTagOpen(false)} />}
     </main>
   );
 }

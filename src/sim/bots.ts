@@ -41,8 +41,8 @@ export const leaveArena: Behavior = (ctx) => ({
 });
 
 /**
- * Killer: heads for where it last saw a survivor (scan reveals) and tries to tag anyone it can
- * actually see (within 20 m, like line of sight). Never uses hidden positions.
+ * Killer: heads for where it last saw a survivor (scan reveals) and closes in on anyone it can
+ * actually see (within 20 m, like line of sight); the Radar Lock does the rest. Never uses hidden positions.
  */
 export const hunt: Behavior = (ctx) => {
   const snap = ctx.snapshot;
@@ -61,5 +61,5 @@ export const hunt: Behavior = (ctx) => {
   const target = lastSeen ?? ctx.center;
   const patrol = dist(ctx.bot.truth, target) < 10 ? destinationPoint(target, ctx.rng.range(0, 360), 30) : target;
   const sighted = ctx.bots.find((b) => inSight.includes(b.playerId));
-  return { to: inward(ctx, sighted ? sighted.truth : patrol), capture: inSight };
+  return { to: inward(ctx, sighted ? sighted.truth : patrol) };
 };

@@ -1,4 +1,4 @@
-import type { CaptureRejection, GameEvent, KillerFacingOutcome, Role } from "../../../src/engine";
+import type { GameEvent, Role } from "../../../src/engine";
 import { matchOutcome, outcomeCopy } from "./outcome";
 
 export type Tone = "info" | "warn" | "danger" | "good";
@@ -117,12 +117,55 @@ export function fxForEvent(e: GameEvent, ctx: FxContext): FxDraft | null {
         durationMs: 1800,
         sound: "blip",
       };
+    case "lock_started":
+      return {
+        kind: "lock_started",
+        title: "Target detected",
+        subtitle: `${nameOf(ctx, e.targetId)} is in range. Hold position.`,
+        tone: "warn",
+        durationMs: 1800,
+        sound: "blip",
+        vibrate: [50],
+      };
+    case "lock_lost":
+      // "inactive" means the target is already out (the capture event says so); nothing to add.
+      if (e.reason === "inactive") return null;
+      return {
+        kind: "lock_lost",
+        title: "Target lost",
+        subtitle: e.reason === "signal" ? "GPS signal dropped. Lock cancelled." : "They got out of range.",
+        tone: "info",
+        durationMs: 1800,
+        sound: "blip",
+        vibrate: [30],
+      };
+    case "radar_locked_on":
+      return {
+        kind: "radar_locked_on",
+        title: "Radar lock detected",
+        subtitle: "A killer is closing in. Get out of range!",
+        tone: "danger",
+        durationMs: 2400,
+        flash: true,
+        sound: "alarm",
+        vibrate: [140, 60, 140],
+      };
+    case "radar_lock_cleared":
+      return {
+        kind: "radar_lock_cleared",
+        title: "Lock broken",
+        subtitle: "You slipped out of range.",
+        tone: "good",
+        durationMs: 1800,
+        sound: "clear",
+        vibrate: [40],
+      };
     case "captured":
       if (e.survivorId === ctx.myId)
         return {
           kind: "caught",
           title: "Caught",
-          subtitle: `${nameOf(ctx, e.killerId)} tagged you.`,
+          subtitle: "A killer completed the radar lock.",
           tone: "danger",
           durationMs: 3400,
           shake: true,
@@ -133,7 +176,7 @@ export function fxForEvent(e: GameEvent, ctx: FxContext): FxDraft | null {
       if (e.killerId === ctx.myId)
         return {
           kind: "tagged",
-          title: "Tagged",
+          title: "Target captured",
           subtitle: `${nameOf(ctx, e.survivorId)} is out.`,
           tone: "good",
           durationMs: 2800,
@@ -144,7 +187,7 @@ export function fxForEvent(e: GameEvent, ctx: FxContext): FxDraft | null {
       return {
         kind: "capture_other",
         title: `${nameOf(ctx, e.survivorId)} caught`,
-        subtitle: `Tagged by ${nameOf(ctx, e.killerId)}.`,
+        subtitle: `Locked by ${nameOf(ctx, e.killerId)}.`,
         tone: "info",
         durationMs: 2400,
         sound: "blip",
@@ -196,55 +239,6 @@ export function fxForEvent(e: GameEvent, ctx: FxContext): FxDraft | null {
         shake: true,
         sound: "alarm",
         vibrate: [160],
-      };
-  }
-}
-
-/** Plain-language reason for a rejected tag (only reasons the killer is allowed to learn). */
-export function captureRejectionText(reason: CaptureRejection): string {
-  switch (reason) {
-    case "match_not_active":
-      return "The match isn't running.";
-    case "not_a_killer":
-      return "Only killers can tag.";
-    case "killer_inactive":
-      return "You're out of the match.";
-    case "stale_location":
-      return "Your GPS signal is stale. Move to open sky.";
-    case "inaccurate_location":
-    case "unreliable_location":
-      return "Your GPS is too weak right now.";
-    case "suspicious_location":
-      return "Your location jumped. Wait a moment and try again.";
-    default:
-      return "Try again in a moment.";
-  }
-}
-
-/** Feedback for the killer's own tag attempt. A success is announced by the capture event instead. */
-export function captureResultFx(outcome: KillerFacingOutcome): FxDraft | null {
-  switch (outcome.status) {
-    case "captured":
-      return null;
-    case "pending":
-      return {
-        kind: "lock",
-        title: "Lock-on",
-        subtitle: `Hold position: ${outcome.hits} of ${outcome.required}.`,
-        tone: "info",
-        durationMs: 1700,
-        sound: "blip",
-        vibrate: [40],
-      };
-    case "miss":
-      return { kind: "miss", title: "No contact", subtitle: "Nobody is in range yet.", tone: "warn", durationMs: 1700, vibrate: [30] };
-    case "rejected":
-      return {
-        kind: "tag_rejected",
-        title: "Can't tag",
-        subtitle: captureRejectionText(outcome.reason),
-        tone: "warn",
-        durationMs: 2200,
       };
   }
 }

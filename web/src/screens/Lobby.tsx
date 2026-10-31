@@ -132,9 +132,9 @@ export function Lobby({ snapshot, room, startCheck }: Props) {
               onChange={(radiusM) => actions.configure({ radiusM })}
               options={room.radiusPresetsM.map((r) => ({ value: r, label: `${r} m` }))}
             />
-            <span className="label">Tag distance</span>
+            <span className="label">Lock range</span>
             <Seg
-              label="Tag distance"
+              label="Lock range"
               value={room.captureRadiusM}
               onChange={(captureRadiusM) => actions.configure({ captureRadiusM })}
               options={CAPTURE_RADII.map((r) => ({ value: r, label: `${r} m` }))}

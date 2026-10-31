@@ -2,7 +2,6 @@ import type { LocationReport } from "../shared/types";
 import { RADIUS_PRESETS_M } from "../geo/zones";
 import type {
   GameEvent,
-  KillerFacingOutcome,
   Role,
   StartEvaluation,
   ViewerSnapshot,
@@ -28,7 +27,6 @@ export type ClientMessage =
   | { t: "confirm_safety" }
   | { t: "start" }
   /** Note: no killer id. The server knows who is asking from the connection. */
-  | { t: "capture"; survivorId: string }
   | { t: "pause" }
   | { t: "resume_match" }
   | { t: "end" }
@@ -56,6 +54,8 @@ export interface RoomInfo {
   maxPlayers: number;
   radiusPresetsM: number[];
   captureRadiusM: number;
+  /** Radar Lock duration, seconds. */
+  lockSeconds: number;
   /** Reveal cadence, so the UI can draw progress bars. */
   revealIntervalMs: number;
   revealDurationMs: number;
@@ -65,7 +65,6 @@ export type ServerMessage =
   | { t: "welcome"; token: string; playerId: string; code: string }
   | { t: "snapshot"; snapshot: ViewerSnapshot; room: RoomInfo; startCheck?: StartEvaluation }
   | { t: "events"; events: GameEvent[] }
-  | { t: "capture_result"; outcome: KillerFacingOutcome }
   | { t: "location_ack"; accepted: boolean; issues: string[]; rateLimited?: boolean }
   | { t: "error"; code: ErrorCode; message: string }
   | { t: "left" };
@@ -154,11 +153,6 @@ export function parseClientMessage(raw: unknown): ParseResult {
         msg.captureRadiusM = raw.captureRadiusM;
       }
       return { ok: true, msg };
-    }
-    case "capture": {
-      if (typeof raw.survivorId !== "string" || !/^[A-Za-z0-9_]{1,32}$/.test(raw.survivorId))
-        return fail("Invalid survivor id.");
-      return { ok: true, msg: { t: "capture", survivorId: raw.survivorId } };
     }
     case "confirm_safety":
     case "start":
