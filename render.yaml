@@ -3,7 +3,7 @@ services:
   - type: web
     name: localgrounds
     runtime: docker
-    plan: starter # the free plan sleeps when idle, which would drop live matches
+    plan: free # sleeps after ~15 min idle and drops in-memory rooms; change to starter for an always-on instance
     healthCheckPath: /healthz
     numInstances: 1
     envVars:
