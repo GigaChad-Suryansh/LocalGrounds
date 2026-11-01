@@ -18,17 +18,31 @@ const TYPES: Record<string, string> = {
 };
 
 /** Map tiles come from OpenStreetMap; fonts from Google Fonts; everything else is same-origin. */
-export const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src https://fonts.gstatic.com",
-  "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
-  "connect-src 'self' ws: wss:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
+/** Tile hosts the built-in map presets use; add your own with EXTRA_IMG_SRC. */
+const TILE_HOSTS = [
+  "https://tile.openstreetmap.org",
+  "https://*.tile.openstreetmap.org",
+  "https://server.arcgisonline.com",
+  "https://services.arcgisonline.com",
+  "https://api.maptiler.com",
+  "https://tiles.stadiamaps.com",
+];
+
+export function buildContentSecurityPolicy(extraImgSrc: readonly string[] = []): string {
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src https://fonts.gstatic.com",
+    `img-src 'self' data: ${[...TILE_HOSTS, ...extraImgSrc].join(" ")}`,
+    "connect-src 'self' ws: wss:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+export const CONTENT_SECURITY_POLICY = buildContentSecurityPolicy();
 
 const tryStat = (p: string): Stats | null => {
   try {
@@ -49,7 +63,8 @@ function end(res: ServerResponse, status: number): true {
  * Unknown extension-less paths fall back to index.html (client-side routing);
  * missing files with an extension are real 404s. Path traversal is refused.
  */
-export function createStaticHandler(rootDir: string) {
+export function createStaticHandler(rootDir: string, opts: { extraImgSrc?: readonly string[] } = {}) {
+  const csp = buildContentSecurityPolicy(opts.extraImgSrc);
   const root = resolve(rootDir);
 
   return (req: IncomingMessage, res: ServerResponse): boolean => {
@@ -87,7 +102,7 @@ export function createStaticHandler(rootDir: string) {
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
       "permissions-policy": "geolocation=(self), camera=(), microphone=()",
-      "content-security-policy": CONTENT_SECURITY_POLICY,
+      "content-security-policy": csp,
     });
     if (req.method === "HEAD") {
       res.end();

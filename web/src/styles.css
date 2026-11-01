@@ -159,7 +159,10 @@ input[type="text"], input:not([type]), .field input {
 
 .map { position: absolute; inset: 0; background: var(--paper); }
 .leaflet-container { font-family: var(--text); background: var(--paper); }
-.leaflet-tile-pane { filter: invert(1) hue-rotate(190deg) brightness(0.78) contrast(0.95) saturate(0.55); }
+.tiles-streets .leaflet-tile-pane { filter: invert(1) hue-rotate(190deg) brightness(0.78) contrast(0.95) saturate(0.55); }
+/* Satellite: a touch darker so the zone overlays and labels stay readable on bright terrain. */
+.tiles-satellite .leaflet-tile-pane { filter: brightness(0.8) contrast(1.06) saturate(1.05); }
+.lg-labels { opacity: 0.9; }
 .leaflet-control-attribution { background: rgba(6, 10, 18, 0.7) !important; color: var(--dim); }
 .leaflet-control-attribution a { color: var(--dim); }
 .leaflet-bar a { background: var(--panel-solid); color: var(--ink); border-color: var(--rule); }
@@ -283,6 +286,10 @@ input[type="text"], input:not([type]), .field input {
 .modal { position: absolute; inset: 0; z-index: 800; background: rgba(2, 5, 10, 0.66); backdrop-filter: blur(3px); display: grid; align-items: end; }
 .modal .panel { background: var(--panel-solid); border-top: 1.5px solid var(--accent); padding: 18px 16px max(20px, env(safe-area-inset-bottom)); display: grid; gap: 12px; max-height: 86%; overflow: auto; animation: sheet-up 0.2s ease-out; max-width: 560px; width: 100%; margin: 0 auto; }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } }
+.modal.is-fixed { position: fixed; z-index: 1200; }
+.h-xs { font: 700 17px/1.1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); margin-top: 6px; }
+ul.plain { display: grid; gap: 6px; padding-left: 18px; list-style: square; font-size: 15px; color: var(--dim); }
+.linkish { background: none; border: 0; padding: 6px 0; color: var(--dim); text-decoration: underline; cursor: pointer; justify-self: start; font-size: 14px; }
 .targets { display: grid; gap: 8px; }
 .targets .btn { width: 100%; justify-content: flex-start; min-height: 56px; font-size: 22px; }
 

@@ -1,0 +1,11 @@
+# Render blueprint (alternative to Fly.io). One instance only: rooms are kept in memory.
+services:
+  - type: web
+    name: localgrounds
+    runtime: docker
+    plan: starter # the free plan sleeps when idle, which would drop live matches
+    healthCheckPath: /healthz
+    numInstances: 1
+    envVars:
+      - key: TRUST_PROXY
+        value: "1"

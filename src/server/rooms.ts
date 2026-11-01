@@ -181,6 +181,7 @@ export class RoomService {
           configureArena(g, playerId, {
             ...(msg.radiusM !== undefined ? { radiusM: msg.radiusM } : {}),
             ...(msg.captureRadiusM !== undefined ? { captureRadiusM: msg.captureRadiusM } : {}),
+            ...(msg.lockSeconds !== undefined ? { lockSeconds: msg.lockSeconds } : {}),
           }),
         );
       case "confirm_safety":

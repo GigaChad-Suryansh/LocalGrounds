@@ -66,7 +66,7 @@ async function main(): Promise<void> {
       permissions: ["geolocation"],
       geolocation: { latitude: pos.lat, longitude: pos.lng, accuracy: 8 },
     });
-    await ctx.route(/tile\.openstreetmap\.org|fonts\.(googleapis|gstatic)\.com/, (r: any) => r.abort()); // eslint-disable-line @typescript-eslint/no-explicit-any
+    await ctx.route(/tile\.openstreetmap\.org|arcgisonline\.com|fonts\.(googleapis|gstatic)\.com/, (r: any) => r.abort()); // eslint-disable-line @typescript-eslint/no-explicit-any
     const page = await ctx.newPage();
     const player: Player = { name, page, ctx, leaks: [], frames: 0, base: pos };
     page.on("pageerror", (e: Error) => { failures++; console.log(`FAIL  [${name}] page error: ${e.message}`); });

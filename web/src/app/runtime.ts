@@ -83,7 +83,7 @@ export const actions = {
     conn.send({ t: "join", code: p.code, name: p.name, role: p.role, consent: true });
   },
   ready: (ready: boolean) => conn.send({ t: "ready", ready }),
-  configure: (c: { radiusM?: number; captureRadiusM?: number }) => conn.send({ t: "configure", ...c }),
+  configure: (c: { radiusM?: number; captureRadiusM?: number; lockSeconds?: number }) => conn.send({ t: "configure", ...c }),
   confirmSafety: () => conn.send({ t: "confirm_safety" }),
   start: () => conn.send({ t: "start" }),
   pause: () => conn.send({ t: "pause" }),

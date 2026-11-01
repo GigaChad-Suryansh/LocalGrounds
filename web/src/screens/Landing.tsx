@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { Role } from "../../../src/engine";
 import { useGame, useStoredString } from "../app/hooks";
 import { actions } from "../app/runtime";
+import { PrivacyNotice } from "../components/PrivacyNotice";
 import { Check, GpsChip, RoleMark, Seg } from "../components/ui";
 import { canHost, gpsProblemText, HOST_MAX_ACCURACY_M } from "../lib/gps";
 
@@ -47,6 +48,7 @@ export function Landing({ initialCode }: { initialCode: string }) {
   const [roleRaw, setRole] = useStoredString("lg.role", "survivor");
   const role: Role = roleRaw === "killer" ? "killer" : "survivor";
   const [radiusM, setRadiusM] = useState(150);
+  const [privacy, setPrivacy] = useState(false);
   const [code, setCode] = useState(initialCode);
   const [consent, setConsent] = useState(false);
 
@@ -95,7 +97,7 @@ export function Landing({ initialCode }: { initialCode: string }) {
               <button key={r} type="button" role="radio" aria-checked={role === r} className={role === r ? "on" : ""} onClick={() => setRole(r)}>
                 <RoleMark role={r} size={26} />
                 <strong>{r === "killer" ? "Killer" : "Survivor"}</strong>
-                <small>{r === "killer" ? "Find survivors and hold a 4 s radar lock within 25 m." : "Stay hidden and inside the closing zone."}</small>
+                <small>{r === "killer" ? "Find survivors and hold a radar lock on them within 25 m." : "Stay hidden and inside the closing zone."}</small>
               </button>
             ))}
           </div>
@@ -162,7 +164,9 @@ export function Landing({ initialCode }: { initialCode: string }) {
           {tab === "host" ? "Create room" : "Join room"}
         </button>
         {blocker && <p className="help">{blocker}</p>}
+        <button type="button" className="linkish" onClick={() => setPrivacy(true)}>Privacy and safety</button>
       </form>
+      {privacy && <PrivacyNotice onClose={() => setPrivacy(false)} />}
     </main>
   );
 }

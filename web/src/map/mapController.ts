@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { tileSpec, type TileEnv } from "./tiles";
 import "leaflet/dist/leaflet.css";
 import type { Role } from "../../../src/engine";
 import type { Circle } from "../../../src/shared/types";
@@ -58,11 +59,11 @@ export class MapController {
 
   constructor(el: HTMLElement) {
     this.map = L.map(el, { zoomControl: false, maxZoom: 20, minZoom: 3, attributionControl: true });
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxNativeZoom: 19,
-      maxZoom: 20,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(this.map);
+    const tiles = tileSpec(import.meta.env as TileEnv);
+    el.classList.add(`tiles-${tiles.kind}`);
+    L.tileLayer(tiles.url, { maxNativeZoom: tiles.maxNativeZoom, maxZoom: 20, attribution: tiles.attribution }).addTo(this.map);
+    if (tiles.labelsUrl)
+      L.tileLayer(tiles.labelsUrl, { maxNativeZoom: 17, maxZoom: 20, className: "lg-labels" }).addTo(this.map);
     L.control.zoom({ position: "bottomright" }).addTo(this.map);
     this.map.setView([20, 0], 3);
   }

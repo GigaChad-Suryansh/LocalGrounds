@@ -23,6 +23,7 @@ const ISSUES: Record<EligibilityIssue, string> = {
 };
 
 const CAPTURE_RADII = [10, 15, 25, 35, 50];
+const LOCK_TIMES = [2, 3, 4, 6, 8];
 
 function useCopy(text: string): [boolean, () => void] {
   const [done, setDone] = useState(false);
@@ -138,6 +139,13 @@ export function Lobby({ snapshot, room, startCheck }: Props) {
               value={room.captureRadiusM}
               onChange={(captureRadiusM) => actions.configure({ captureRadiusM })}
               options={CAPTURE_RADII.map((r) => ({ value: r, label: `${r} m` }))}
+            />
+            <span className="label">Lock time</span>
+            <Seg
+              label="Lock time"
+              value={room.lockSeconds}
+              onChange={(lockSeconds) => actions.configure({ lockSeconds })}
+              options={LOCK_TIMES.map((r) => ({ value: r, label: `${r} s` }))}
             />
             <Check checked={snapshot.safetyConfirmed} disabled={snapshot.safetyConfirmed} onChange={() => actions.confirmSafety()}>
               I've checked that this area is open to the public, safe to move around in, and away from roads and water.

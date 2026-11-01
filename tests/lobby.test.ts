@@ -48,6 +48,11 @@ describe("host-only arena settings", () => {
     expect(() => configureArena(buildLobby(), "k1", { captureRadiusM: min - 1 })).toThrow(GameRuleError);
     expect(() => configureArena(buildLobby(), "k1", { captureRadiusM: max + 1 })).toThrow(GameRuleError);
     expect(() => configureArena(buildLobby(), "k1", { captureRadiusM: NaN })).toThrow(GameRuleError);
+    // lock time: whole seconds within range, host only, lobby only
+    expect(configureArena(buildLobby(), "k1", { lockSeconds: 6 }).config.capture.lockSeconds).toBe(6);
+    for (const bad of [1, 11, 3.5, NaN])
+      expect(() => configureArena(buildLobby(), "k1", { lockSeconds: bad })).toThrow(GameRuleError);
+    expect(() => configureArena(buildLobby(), "s1", { lockSeconds: 6 })).toThrow(GameRuleError);
   });
 });
 

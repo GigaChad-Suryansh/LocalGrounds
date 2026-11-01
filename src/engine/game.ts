@@ -153,6 +153,7 @@ export function setReady(state: GameState, playerId: string, ready: boolean): Ga
 }
 
 export const CAPTURE_RADIUS_RANGE_M = { min: 5, max: 50 } as const;
+export const LOCK_SECONDS_RANGE = { min: 2, max: 10 } as const;
 
 /**
  * Host-only lobby settings. Changing the arena size invalidates the host's
@@ -161,7 +162,7 @@ export const CAPTURE_RADIUS_RANGE_M = { min: 5, max: 50 } as const;
 export function configureArena(
   state: GameState,
   byPlayerId: string,
-  opts: { radiusM?: number; captureRadiusM?: number },
+  opts: { radiusM?: number; captureRadiusM?: number; lockSeconds?: number },
 ): GameState {
   if (byPlayerId !== state.hostId)
     throw new GameRuleError("Only the host can change the arena settings.");
@@ -188,6 +189,18 @@ export function configureArena(
       config: {
         ...next.config,
         capture: { ...next.config.capture, captureRadiusM: opts.captureRadiusM },
+      },
+    };
+  }
+  if (opts.lockSeconds !== undefined) {
+    const { min, max } = LOCK_SECONDS_RANGE;
+    if (!Number.isInteger(opts.lockSeconds) || opts.lockSeconds < min || opts.lockSeconds > max)
+      throw new GameRuleError(`Lock time must be a whole number of seconds from ${min} to ${max}.`);
+    next = {
+      ...next,
+      config: {
+        ...next.config,
+        capture: { ...next.config.capture, lockSeconds: opts.lockSeconds },
       },
     };
   }

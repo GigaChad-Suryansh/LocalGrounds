@@ -1,0 +1,31 @@
+# Fly.io config. Before the first deploy: set `app` to a unique name (or run `fly launch --no-deploy`).
+# Rooms live in memory, so run exactly ONE machine and never auto-stop it.
+app = "localgrounds"
+primary_region = "sin" # pick the region closest to your players (sin = Singapore; bom = Mumbai)
+
+[build]
+  dockerfile = "Dockerfile"
+  # Tile settings, e.g. a keyed provider:  [build.args]  VITE_TILE_URL = "https://..."
+
+[env]
+  PORT = "8080"
+  TRUST_PROXY = "1"
+  # ALLOWED_ORIGINS = "https://your-domain.example"   # only if the page is served from a different host
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

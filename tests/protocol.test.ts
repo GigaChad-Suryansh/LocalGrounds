@@ -94,6 +94,8 @@ describe("client message parsing", () => {
     expect(parseClientMessage({ t: "configure" }).ok).toBe(true);
     bad({ t: "configure", radiusM: 80 });
     bad({ t: "configure", captureRadiusM: "big" });
+    expect(parseClientMessage({ t: "configure", lockSeconds: 6 }).ok).toBe(true);
+    bad({ t: "configure", lockSeconds: "long" });
   });
 
   it("has no capture message: a lock is never completed or started by a client", () => {

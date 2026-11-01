@@ -23,7 +23,7 @@ export type ClientMessage =
   | { t: "resume"; token: string }
   | { t: "location"; report: LocationReport }
   | { t: "ready"; ready: boolean }
-  | { t: "configure"; radiusM?: number; captureRadiusM?: number }
+  | { t: "configure"; radiusM?: number; captureRadiusM?: number; lockSeconds?: number }
   | { t: "confirm_safety" }
   | { t: "start" }
   /** Note: no killer id. The server knows who is asking from the connection. */
@@ -151,6 +151,10 @@ export function parseClientMessage(raw: unknown): ParseResult {
       if (raw.captureRadiusM !== undefined) {
         if (!isNum(raw.captureRadiusM)) return fail("captureRadiusM must be a number.");
         msg.captureRadiusM = raw.captureRadiusM;
+      }
+      if (raw.lockSeconds !== undefined) {
+        if (!isNum(raw.lockSeconds)) return fail("lockSeconds must be a number.");
+        msg.lockSeconds = raw.lockSeconds;
       }
       return { ok: true, msg };
     }

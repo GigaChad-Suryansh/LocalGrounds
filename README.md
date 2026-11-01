@@ -88,10 +88,50 @@ Browsers only allow geolocation on **HTTPS or localhost**, so to test on phones 
 those hosts if you restrict the network. Stationary phones often stop emitting GPS updates, so the
 client re-confirms the last fix for up to 45 s before letting the signal show as lost.
 
+## Map: free satellite imagery
+
+The map is satellite imagery by default (Esri World Imagery plus place labels), free to use with the attribution
+shown on the map. Google's satellite tiles can't be used for free in a third-party app (their terms and billing
+forbid it), so Esri is the closest free equivalent. Alternatives, all set at build time (see `.env.example`):
+
+| Provider | Free tier | Notes |
+|----------|-----------|-------|
+| Esri World Imagery (default) | free with attribution, no key | for a large public launch, register a free ArcGIS developer key (about 2M tiles a month) |
+| MapTiler satellite | free key, about 100k requests a month | non-commercial use on the free plan |
+| Mapbox satellite | free key, about 200k loads a month | needs an account |
+| OpenStreetMap streets | free | `VITE_TILE_STYLE=streets`; fair use only, not for heavy public traffic |
+
+For a keyed provider set `VITE_TILE_URL`, `VITE_TILE_KEY`, `VITE_TILE_ATTRIBUTION` and add the host to
+`EXTRA_IMG_SRC` so the Content-Security-Policy allows it. Keys in a browser app are visible to users, so restrict them
+to your domain in the provider's dashboard.
+
+## Deploying
+
+One Node process serves the web app and the game WebSocket on one port, and keeps rooms in memory, so run **exactly one
+instance** (a restart ends live matches). HTTPS is required for phone GPS; Fly.io and Render provide it.
+
+```
+# Fly.io (fly.toml is ready; change `app` and `primary_region`)
+fly launch --no-deploy --copy-config
+fly deploy
+
+# Render: New > Blueprint, point it at this repo (render.yaml)
+
+# Any Docker host
+docker build -t localgrounds . && docker run -p 8080:8080 -e TRUST_PROXY=1 localgrounds
+```
+
+Settings are environment variables (`PORT`, `TRUST_PROXY`, `ALLOWED_ORIGINS`, `EXTRA_IMG_SRC`, `MAX_CONNECTIONS_PER_IP`;
+see `.env.example`). Set `TRUST_PROXY=1` behind a proxy so the per-address connection limit uses the real client address.
+Foreign-origin WebSocket handshakes are refused. The server logs one line a minute with room and connection counts, never
+names or locations. The Docker image was not built in the development sandbox (no Docker daemon there), but the same steps
+were run by hand: clean `npm ci` with production settings, then `tsx src/server/main.ts`, `/healthz` and `/` both answer.
+
 ## Radar Lock (capture)
 
 A killer no longer taps to tag. When a killer is within the capture range (25 m, host-adjustable) of an
-active survivor, the **server** starts a lock and fills it over 4 s of server time (`captureConfig.lockSeconds`).
+active survivor, the **server** starts a lock and fills it over 4 s of server time. The host can change the range and the
+lock time (2 to 10 s) in the lobby.
 
 - Entering range starts the lock; leaving range cancels it and progress goes back to 0. A running lock tolerates
   GPS jitter (it only breaks beyond 1.2x the range), and accuracy is forgiven by at most 10 m, as before.
